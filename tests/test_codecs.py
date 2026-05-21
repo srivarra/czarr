@@ -317,8 +317,8 @@ def test_codec_instance_is_cached_per_thread():
     assert a is b
 
 
-def test_resolve_stream_accepts_int_and_handle_objects():
-    """Stream coercion: raw int, ``__cuda_stream__``, ``.handle``, ``.ptr`` all map to int."""
+def test_resolve_stream_accepts_int_and_protocol_objects():
+    """Stream coercion: raw int + ``__cuda_stream__`` protocol; nothing else."""
     fn = LZ4._resolve_stream
     assert fn(None) is None
     assert fn(42) == 42
@@ -327,15 +327,17 @@ def test_resolve_stream_accepts_int_and_handle_objects():
         def __cuda_stream__(self):
             return (0, 789)
 
+    assert fn(ProtoObj()) == 789
+
+
+def test_resolve_stream_rejects_bare_attribute_objects():
+    """Objects with ``.handle`` / ``.ptr`` but no ``__cuda_stream__`` are rejected."""
+
     class HandleObj:
         handle = 123
 
-    class PtrObj:
-        ptr = 456
-
-    assert fn(ProtoObj()) == 789
-    assert fn(HandleObj()) == 123
-    assert fn(PtrObj()) == 456
+    with pytest.raises(TypeError, match="__cuda_stream__"):
+        LZ4._resolve_stream(HandleObj())
 
 
 def test_resolve_stream_rejects_future_protocol_version():

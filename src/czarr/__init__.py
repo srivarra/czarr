@@ -52,8 +52,7 @@ from czarr.codecs import (
     Zlib,
     Zstd,
 )
-from czarr.pipeline import CzarrCodecPipeline
-from czarr.storage import GPULocalStore
+from czarr.storage import GPULocalStore, cufile_runtime
 
 
 def configure_gpu(
@@ -69,8 +68,9 @@ def configure_gpu(
     Configures zarr's runtime so that:
 
     * Every ``arr[:]`` (and any other selection) decodes the whole chunk
-      batch in a single nvCOMP call — :class:`czarr.pipeline.CzarrCodecPipeline`
-      is installed as the codec pipeline.
+      batch in a single nvCOMP call — sets ``codec_pipeline.batch_size``
+      to ``sys.maxsize`` on zarr's default ``BatchedCodecPipeline`` so one
+      ``Codec.decode([all])`` runs per read.
     * Buffers default to GPU prototypes — :class:`zarr.core.buffer.gpu.Buffer`
       and ``gpu.NDBuffer``.  No more wrapping every call in
       ``zarr.config.set({"buffer": ...})``.
@@ -102,14 +102,10 @@ def configure_gpu(
     if rmm_pool_gb is not None:
         use_rmm_pool(initial_size=int(rmm_pool_gb * (1 << 30)))
     register_nvcomp_allocator()
-    if cufile_poll_mode:
-        from czarr.storage import cufile_runtime
-
-        if cufile_runtime.is_available():
-            cufile_runtime.set_poll_mode(True, cufile_poll_threshold_kb)
+    if cufile_poll_mode and cufile_runtime.is_available():
+        cufile_runtime.set_poll_mode(True, cufile_poll_threshold_kb)
 
     settings: dict[str, Any] = {
-        "codec_pipeline.path": "czarr.pipeline.CzarrCodecPipeline",
         "codec_pipeline.batch_size": batch_size if batch_size is not None else sys.maxsize,
         "async.concurrency": async_concurrency,
         "buffer": "zarr.core.buffer.gpu.Buffer",
@@ -130,7 +126,6 @@ __all__ = [
     "Cascaded",
     "Checksum",
     "Codec",
-    "CzarrCodecPipeline",
     "Deflate",
     "GDeflate",
     "GPULocalStore",

@@ -5,7 +5,7 @@ GPU-accelerated NVIDIA nvCOMP codecs for Zarr 3.x — read and write Zarr arrays
 czarr plugs into zarr's official extension points:
 
 - **Codecs** — 10 `BytesBytesCodec` subclasses registered with `zarr.registry.register_codec`
-- **Codec pipeline** — `CzarrCodecPipeline` registered with `register_pipeline` (batches all decode calls)
+- **Codec pipeline tuning** — bumps `codec_pipeline.batch_size` on zarr's stock `BatchedCodecPipeline` so every selection's chunks get decoded in one nvCOMP call
 - **Stores** — `GPULocalStore` extends `zarr.storage.LocalStore` for direct disk-to-GPU reads via cuFile
 
 ## What's in the box
@@ -137,7 +137,6 @@ The right answer depends on access pattern. Volume-per-chunk works best for ML t
 | `ANS, Bitcomp, Cascaded, Deflate, GDeflate, Snappy` | Native — nvCOMP-only bitstream, max throughput |
 | `Zstd, LZ4, Gzip, Zlib` | Compat — bit-identical with libzstd / liblz4 / libdeflate / libz; shadow CPU codecs in registry after `configure_gpu()` |
 | `Checksum` | Enum for codec config |
-| `CzarrCodecPipeline` | The codec pipeline registered with zarr (batches every selection's decode into one nvCOMP call) |
 | `GPULocalStore(root, *, read_only=False, force_gpu=False)` | cuFile-backed local store |
 | `register_nvcomp_allocator(allocator=None)` | Hook nvCOMP into cupy's allocator (auto-called) |
 | `use_rmm_pool(initial_size=1<<30, maximum_size=None)` | Switch the whole stack to an RMM pool |

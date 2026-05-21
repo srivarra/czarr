@@ -70,7 +70,8 @@ class _BitstreamKind(StrEnum):
     WITH_UNCOMPRESSED_SIZE = "WITH_UNCOMPRESSED_SIZE"
 
     def to_nvcomp(self) -> nvcomp.BitstreamKind:
-        return getattr(nvcomp.BitstreamKind, self.value)
+        """Resolve to the nvCOMP ``BitstreamKind`` enum member of the same name."""
+        return _BITSTREAM_KIND_MAP[self]
 
 
 class Checksum(StrEnum):
@@ -84,7 +85,23 @@ class Checksum(StrEnum):
 
     def to_nvcomp(self) -> nvcomp.ChecksumPolicy:
         """Resolve to the nvCOMP ``ChecksumPolicy`` enum member of the same name."""
-        return getattr(nvcomp.ChecksumPolicy, self.value)
+        return _CHECKSUM_MAP[self]
+
+
+# Static maps validated at import — if NVIDIA renames an enum member we crash
+# here at module load, not on first codec creation in some random caller.
+_BITSTREAM_KIND_MAP: dict[_BitstreamKind, nvcomp.BitstreamKind] = {
+    _BitstreamKind.NVCOMP_NATIVE: nvcomp.BitstreamKind.NVCOMP_NATIVE,
+    _BitstreamKind.RAW: nvcomp.BitstreamKind.RAW,
+    _BitstreamKind.WITH_UNCOMPRESSED_SIZE: nvcomp.BitstreamKind.WITH_UNCOMPRESSED_SIZE,
+}
+_CHECKSUM_MAP: dict[Checksum, nvcomp.ChecksumPolicy] = {
+    Checksum.NO_COMPUTE_NO_VERIFY: nvcomp.ChecksumPolicy.NO_COMPUTE_NO_VERIFY,
+    Checksum.COMPUTE_AND_NO_VERIFY: nvcomp.ChecksumPolicy.COMPUTE_AND_NO_VERIFY,
+    Checksum.NO_COMPUTE_AND_VERIFY_IF_PRESENT: nvcomp.ChecksumPolicy.NO_COMPUTE_AND_VERIFY_IF_PRESENT,
+    Checksum.COMPUTE_AND_VERIFY_IF_PRESENT: nvcomp.ChecksumPolicy.COMPUTE_AND_VERIFY_IF_PRESENT,
+    Checksum.COMPUTE_AND_VERIFY: nvcomp.ChecksumPolicy.COMPUTE_AND_VERIFY,
+}
 
 
 def _is_gpu_prototype(prototype: BufferPrototype) -> bool:
@@ -133,21 +150,26 @@ class Codec(BytesBytesCodec):
 
     @staticmethod
     def _resolve_stream(stream: Any) -> int | None:
+        """Coerce a stream-like into a ``cudaStream_t`` int.
+
+        Accepted: ``None``, a raw int, or an object exposing the NVIDIA
+        ``__cuda_stream__()`` protocol (``cuda.core.Stream``,
+        ``cupy.cuda.Stream``, ``rmm.pylibrmm.stream.Stream``, plus anything
+        else that implements it).  Everything else raises ``TypeError`` —
+        no silent best-effort ``int(stream)`` coercion that may produce a
+        bogus handle and crash deep inside cuFile.
+        """
         if stream is None:
             return None
         if isinstance(stream, int):
             return stream
-        proto = getattr(stream, "__cuda_stream__", None)
-        if proto is not None:
-            version, ptr = proto()
-            if version != 0:
-                raise ValueError(f"unsupported __cuda_stream__ protocol version: {version}")
-            return int(ptr)
-        for attr in ("handle", "ptr"):
-            value = getattr(stream, attr, None)
-            if value is not None:
-                return int(value)
-        return int(stream)
+        proto = stream.__cuda_stream__ if hasattr(type(stream), "__cuda_stream__") else None
+        if proto is None:
+            raise TypeError(f"cuda_stream must be None, int, or implement __cuda_stream__; got {type(stream).__name__}")
+        version, ptr = proto()
+        if version != 0:
+            raise ValueError(f"unsupported __cuda_stream__ protocol version: {version}")
+        return int(ptr)
 
     def _create_codec(self) -> nvcomp.Codec:
         kwargs: dict[str, Any] = {
@@ -165,11 +187,12 @@ class Codec(BytesBytesCodec):
         return nvcomp.Codec(**kwargs)
 
     def _get_codec(self) -> nvcomp.Codec:
-        cached: nvcomp.Codec | None = getattr(self._thread_local, "codec", None)
-        if cached is None:
-            cached = self._create_codec()
-            self._thread_local.codec = cached
-        return cached
+        try:
+            return self._thread_local.codec
+        except AttributeError:
+            codec = self._create_codec()
+            self._thread_local.codec = codec
+            return codec
 
     def get_stream(self) -> int:
         """Return the ``cudaStream_t`` handle nvCOMP runs this codec on.
@@ -178,9 +201,10 @@ class Codec(BytesBytesCodec):
         the codec output (e.g. ``cupy.cuda.ExternalStream(codec.get_stream())``
         avoids an implicit sync between decode and the next compute).
         """
-        cached: int | None = getattr(self._thread_local, "stream_handle", None)
-        if cached is not None:
-            return cached
+        try:
+            return self._thread_local.stream_handle
+        except AttributeError:
+            pass
         explicit = self._resolve_stream(self.cuda_stream)
         if explicit is not None:
             self._thread_local.stream_handle = explicit
@@ -314,11 +338,13 @@ class Codec(BytesBytesCodec):
     @classmethod
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct a codec from its ``to_dict`` payload (tolerant of CPU schemas)."""
-        config = dict(data.get("configuration", {}))  # type: ignore[arg-type]
+        raw = data.get("configuration", {})
+        if not isinstance(raw, dict):
+            raise TypeError(f"codec configuration must be a mapping, got {type(raw).__name__}")
         # Accept CPU-codec config schemas (e.g. zarr's ZstdCodec has
         # {"level", "checksum"}; we ignore them since nvCOMP picks its own).
         valid = {f.name for f in fields(cls)}
-        filtered = {k: v for k, v in config.items() if k in valid}
+        filtered: dict[str, Any] = {k: v for k, v in raw.items() if k in valid}
         if "checksum_policy" in filtered and isinstance(filtered["checksum_policy"], str):
             filtered["checksum_policy"] = Checksum(filtered["checksum_policy"])
-        return cls(**filtered)  # type: ignore[arg-type]
+        return cls(**filtered)

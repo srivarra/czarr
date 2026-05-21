@@ -17,6 +17,7 @@ import atexit
 import ctypes
 import os
 import threading
+import weakref
 from contextlib import contextmanager
 
 import cupy as cp
@@ -47,7 +48,7 @@ def _close() -> None:
         return
     try:
         cufile.driver_close()
-    except Exception:  # noqa: BLE001 — already shutting down
+    except cufile.cuFileError:
         pass
     _opened = False
 
@@ -116,7 +117,7 @@ def registered_handle(fd: int):
     finally:
         try:
             cufile.handle_deregister(handle)
-        except Exception:  # noqa: BLE001 — best-effort cleanup
+        except cufile.cuFileError:
             pass
 
 
@@ -178,7 +179,7 @@ def ensure_buf_registered(dev_ptr: int, size: int) -> None:
         if existing is not None:
             try:
                 cufile.buf_deregister(dev_ptr)
-            except Exception:  # noqa: BLE001 — best-effort
+            except cufile.cuFileError:
                 pass
         cufile.buf_register(dev_ptr, size, 0)
         _registered_bufs[dev_ptr] = size
@@ -193,7 +194,7 @@ def deregister_buf(dev_ptr: int) -> None:
             return
         try:
             cufile.buf_deregister(dev_ptr)
-        except Exception:  # noqa: BLE001 — best-effort
+        except cufile.cuFileError:
             pass
         _registered_bufs.pop(dev_ptr, None)
 
@@ -205,15 +206,27 @@ class _AsyncIOArgs:
     the GDS kernel reads them when the work actually runs.  These pointers
     must outlive the call until the stream syncs, so the caller stashes one of
     these objects per outstanding submission.
+
+    Optional ``fd`` / ``fh`` / ``descr`` slots are populated by
+    :func:`read_into_async` to keep the OS fd, cuFile handle, and descriptor
+    alive until ``args`` is GC'd.  When set directly via :func:`read_async`
+    (caller owns the handle), they stay ``None`` and ``deregister``-on-finalize
+    is the caller's responsibility.
     """
+
+    __slots__ = ("size_p", "off_p", "doff_p", "bytes_p", "_fd", "_fh", "_descr", "__weakref__")
 
     def __init__(self) -> None:
         self.size_p = cp.cuda.alloc_pinned_memory(8)
         self.off_p = cp.cuda.alloc_pinned_memory(8)
         self.doff_p = cp.cuda.alloc_pinned_memory(8)
         self.bytes_p = cp.cuda.alloc_pinned_memory(8)
+        self._fd: int | None = None
+        self._fh: int | None = None
+        self._descr: object | None = None
 
     def fill(self, size: int, file_offset: int, dev_offset: int) -> None:
+        """Populate the pinned scalars before submitting the async I/O."""
         ctypes.cast(int(self.size_p), ctypes.POINTER(ctypes.c_size_t))[0] = size
         ctypes.cast(int(self.off_p), ctypes.POINTER(ctypes.c_int64))[0] = file_offset
         ctypes.cast(int(self.doff_p), ctypes.POINTER(ctypes.c_int64))[0] = dev_offset
@@ -221,6 +234,7 @@ class _AsyncIOArgs:
 
     @property
     def bytes_done(self) -> int:
+        """Bytes actually transferred (read after stream sync)."""
         return ctypes.cast(int(self.bytes_p), ctypes.POINTER(ctypes.c_ssize_t))[0]
 
 
@@ -292,23 +306,24 @@ def read_into_async(
     s.fs_ops = 0
     fh = cufile.handle_register(int(descr))
     args = make_io_args()
-    # Keep fd + fh alive on the args object so they outlive the async call.
-    args._fd = fd  # type: ignore[attr-defined]
-    args._fh = fh  # type: ignore[attr-defined]
-    args._descr = descr  # type: ignore[attr-defined]
+    # Keep fd + fh + descr alive on the args object so they outlive the
+    # async call.  ``__slots__`` declares them so this is type-clean.
+    args._fd = fd
+    args._fh = fh
+    args._descr = descr
 
-    def _close_on_finalize(args_ref=args, fd_=fd, fh_=fh):
-        try:
-            cufile.handle_deregister(fh_)
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            os.close(fd_)
-        except Exception:  # noqa: BLE001
-            pass
-
-    import weakref
-
-    weakref.finalize(args, _close_on_finalize)
+    weakref.finalize(args, _close_async_handle, fd, fh)
     read_async(fh, dev_ptr, size, stream_ptr, args=args, file_offset=file_offset)
     return args
+
+
+def _close_async_handle(fd: int, fh: int) -> None:
+    """Deregister a cuFile handle + close its fd; called from ``_AsyncIOArgs`` finalize."""
+    try:
+        cufile.handle_deregister(fh)
+    except cufile.cuFileError:
+        pass
+    try:
+        os.close(fd)
+    except OSError:
+        pass
