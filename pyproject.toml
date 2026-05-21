@@ -56,14 +56,17 @@ urls.Documentation = "https://czarr.readthedocs.io/"
 urls.Homepage = "https://github.com/srivarra/czarr"
 urls.Source = "https://github.com/srivarra/czarr"
 
-entry-points."zarr.codecs"."czarr.nvcomp_ans" = "czarr.codecs:NvCompANSCodec"
-entry-points."zarr.codecs"."czarr.nvcomp_bitcomp" = "czarr.codecs:NvCompBitcompCodec"
-entry-points."zarr.codecs"."czarr.nvcomp_cascaded" = "czarr.codecs:NvCompCascadedCodec"
-entry-points."zarr.codecs"."czarr.nvcomp_deflate" = "czarr.codecs:NvCompDeflateCodec"
-entry-points."zarr.codecs"."czarr.nvcomp_gdeflate" = "czarr.codecs:NvCompGDeflateCodec"
-entry-points."zarr.codecs"."czarr.nvcomp_lz4" = "czarr.codecs:NvCompLZ4Codec"
-entry-points."zarr.codecs"."czarr.nvcomp_snappy" = "czarr.codecs:NvCompSnappyCodec"
-entry-points."zarr.codecs"."czarr.nvcomp_zstd" = "czarr.codecs:NvCompZstdCodec"
+entry-points."zarr.codec_pipelines"."czarr" = "czarr.pipeline:CzarrCodecPipeline"
+# Auto-discoverable native codecs — zarr loads these lazily when it
+# encounters their codec_id in array metadata.  Compat codecs (zstd /
+# lz4 / gzip / zlib) are NOT registered here on purpose: they shadow
+# stdlib codecs and must be explicitly opted-in via configure_gpu().
+entry-points."zarr.codecs"."czarr.ans" = "czarr.codecs.native:ANS"
+entry-points."zarr.codecs"."czarr.bitcomp" = "czarr.codecs.native:Bitcomp"
+entry-points."zarr.codecs"."czarr.cascaded" = "czarr.codecs.native:Cascaded"
+entry-points."zarr.codecs"."czarr.deflate" = "czarr.codecs.native:Deflate"
+entry-points."zarr.codecs"."czarr.gdeflate" = "czarr.codecs.native:GDeflate"
+entry-points."zarr.codecs"."czarr.snappy" = "czarr.codecs.native:Snappy"
 
 [dependency-groups]
 dev = [
