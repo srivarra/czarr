@@ -147,3 +147,12 @@ def test_cufile_runtime_read_into_async_roundtrip(lustre_tmpdir):
     got = np.frombuffer(dbuf.get(), dtype=np.uint32)
     np.testing.assert_array_equal(got, payload)
     cufile_runtime.deregister_buf(int(dbuf.data.ptr))
+
+
+def test_set_poll_mode_toggles_without_error():
+    """``set_poll_mode`` should be idempotent and not crash regardless of fs type."""
+    if not cufile_runtime.is_available():
+        pytest.skip("cuFile not available on this host")
+    # Toggle on then off — both must return cleanly.
+    cufile_runtime.set_poll_mode(True, threshold_kb=4)
+    cufile_runtime.set_poll_mode(False, threshold_kb=4)

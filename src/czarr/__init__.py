@@ -61,6 +61,8 @@ def configure_gpu(
     batch_size: int | None = None,
     async_concurrency: int = 32,
     rmm_pool_gb: float | None = None,
+    cufile_poll_mode: bool = False,
+    cufile_poll_threshold_kb: int = 4,
 ) -> None:
     """One-call setup for GPU-codec workloads.
 
@@ -88,10 +90,23 @@ def configure_gpu(
         If set, initialise an RMM pool of this size (in GiB) and route all
         device allocations (cupy + nvCOMP) through it.  Use when sharing a
         process with cuDF / cuML / kvikIO.
+    cufile_poll_mode:
+        If True, switch cuFile from IRQ-driven to spin-polling completion
+        for I/Os up to ``cufile_poll_threshold_kb``.  Lower latency on
+        small reads at the cost of CPU.  Default False — fine for our
+        typical multi-MiB chunks.
+    cufile_poll_threshold_kb:
+        Max I/O size (KiB) that uses polling when ``cufile_poll_mode=True``.
+        Larger I/Os fall back to IRQ-driven completion regardless.
     """
     if rmm_pool_gb is not None:
         use_rmm_pool(initial_size=int(rmm_pool_gb * (1 << 30)))
     register_nvcomp_allocator()
+    if cufile_poll_mode:
+        from czarr.storage import cufile_runtime
+
+        if cufile_runtime.is_available():
+            cufile_runtime.set_poll_mode(True, cufile_poll_threshold_kb)
 
     settings: dict[str, Any] = {
         "codec_pipeline.path": "czarr.pipeline.CzarrCodecPipeline",

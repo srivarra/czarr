@@ -84,6 +84,21 @@ def is_async_available() -> bool:
     return is_available() and os.path.exists("/proc/driver/nvidia-fs")
 
 
+def set_poll_mode(poll: bool, threshold_kb: int = 4) -> None:
+    """Toggle cuFile's polling-vs-IRQ completion mode.
+
+    With ``poll=True``, cuFile spins the calling thread until each I/O up to
+    ``threshold_kb`` finishes, avoiding the wakeup cost of IRQ-driven
+    completion.  Useful when many small reads dominate (sub-MiB chunks) and
+    you have CPU to burn.  For our typical ≥1 MiB chunks the IRQ path is
+    fine — the polling threshold caps which I/Os get the spin treatment.
+
+    Idempotent.  Opens the driver if needed.
+    """
+    ensure_driver_open()
+    cufile.driver_set_poll_mode(bool(poll), int(threshold_kb))
+
+
 @contextmanager
 def registered_handle(fd: int):
     """Register an OS file descriptor with cuFile and yield the cuFile handle.
