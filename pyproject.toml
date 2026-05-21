@@ -56,21 +56,23 @@ urls.Documentation = "https://czarr.readthedocs.io/"
 urls.Homepage = "https://github.com/srivarra/czarr"
 urls.Source = "https://github.com/srivarra/czarr"
 
-entry-points."zarr.codec_pipelines"."czarr" = "czarr.pipeline:CzarrCodecPipeline"
 # Auto-discoverable native codecs — zarr loads these lazily when it
 # encounters their codec_id in array metadata.  Compat codecs (zstd /
 # lz4 / gzip / zlib) are NOT registered here on purpose: they shadow
 # stdlib codecs and must be explicitly opted-in via configure_gpu().
-entry-points."zarr.codecs"."czarr.ans" = "czarr.codecs.native:ANS"
-entry-points."zarr.codecs"."czarr.bitcomp" = "czarr.codecs.native:Bitcomp"
-entry-points."zarr.codecs"."czarr.cascaded" = "czarr.codecs.native:Cascaded"
-entry-points."zarr.codecs"."czarr.deflate" = "czarr.codecs.native:Deflate"
-entry-points."zarr.codecs"."czarr.gdeflate" = "czarr.codecs.native:GDeflate"
-entry-points."zarr.codecs"."czarr.snappy" = "czarr.codecs.native:Snappy"
+[project.entry-points."zarr.codecs"]
+"czarr.ans"      = "czarr.codecs.native:ANS"
+"czarr.bitcomp"  = "czarr.codecs.native:Bitcomp"
+"czarr.cascaded" = "czarr.codecs.native:Cascaded"
+"czarr.deflate"  = "czarr.codecs.native:Deflate"
+"czarr.gdeflate" = "czarr.codecs.native:GDeflate"
+"czarr.snappy"   = "czarr.codecs.native:Snappy"
+
+[project.entry-points."zarr.codec_pipelines"]
+"czarr" = "czarr.pipeline:CzarrCodecPipeline"
 
 [dependency-groups]
 dev = [
-  "iohub==0.3.0a4",
   "pre-commit",
   "twine>=4.0.2",
   "ty>=0.0.12",
