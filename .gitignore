@@ -19,3 +19,19 @@ __pycache__/
 # docs
 /docs/generated/
 /docs/_build/
+
+# SLURM + bench job logs (run artefacts, not source)
+/*.log
+/.dex/
+bench/logs/
+**/*.err
+
+# nsys / profiling artefacts
+*.nsys-rep
+*.sqlite
+*.qdrep
+*.qdstrm
+
+# libcufile auto-creates this in cwd
+cufile.log
+.gpustore_test_*

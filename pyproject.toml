@@ -11,37 +11,75 @@ license = { file = "LICENSE" }
 maintainers = [
   { name = "Sricharan Reddy Varra", email = "sricharan.varra@biohub.org" },
 ]
-authors = [
-  { name = "Sricharan Reddy Varra" },
-]
-requires-python = ">=3.11"
+authors = [ { name = "Sricharan Reddy Varra" } ]
+requires-python = ">=3.12"
 classifiers = [
+  "Operating System :: POSIX :: Linux",
+
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-  "anndata",
-  # for debug logging (referenced from the issue template)
+  # CUDA-version-agnostic core. Pick a CUDA build via the `cu12` or `cu13`
+  # extra below — installing czarr without one of them will fail at import.
+  "scipy>=1.17",
   "session-info2",
+  "structlog>=25.5",
+  "zarr>=3.1.5",
+  "zarrs>=0.2.1",
+]
+# CUDA-build extras. The CUDA-version-specific wheels conflict with each
+# other, so czarr ships them as mutually-exclusive opt-ins (see
+# rapids-single-cell for the pattern). Use:
+#   pip install "czarr[cu12]"   # CUDA 12 systems
+#   pip install "czarr[cu13]"   # CUDA 13 systems
+optional-dependencies.cu12 = [
+  "cuda-python>=12.9,<13",
+  "cupy-cuda12x>=13.6",
+  "nvidia-cuda-nvrtc-cu12>=12.9.86",
+  "nvidia-cuda-runtime-cu12>=12.9.79",
+  "nvidia-nvcomp-cu12>=5.1.0.21",
+  "rmm-cu12>=26",
+]
+optional-dependencies.cu13 = [
+  "cuda-python>=13",
+  "cupy-cuda13x>=13.6",
+  "nvidia-cuda-nvrtc-cu13",
+  "nvidia-cuda-runtime-cu13",
+  "nvidia-nvcomp-cu13>=5.1.0.21",
+  "rmm-cu13>=26",
 ]
 # https://docs.pypi.org/project_metadata/#project-urls
 urls.Documentation = "https://czarr.readthedocs.io/"
 urls.Homepage = "https://github.com/srivarra/czarr"
 urls.Source = "https://github.com/srivarra/czarr"
 
+entry-points."zarr.codecs"."czarr.nvcomp_ans" = "czarr.codecs:NvCompANSCodec"
+entry-points."zarr.codecs"."czarr.nvcomp_bitcomp" = "czarr.codecs:NvCompBitcompCodec"
+entry-points."zarr.codecs"."czarr.nvcomp_cascaded" = "czarr.codecs:NvCompCascadedCodec"
+entry-points."zarr.codecs"."czarr.nvcomp_deflate" = "czarr.codecs:NvCompDeflateCodec"
+entry-points."zarr.codecs"."czarr.nvcomp_gdeflate" = "czarr.codecs:NvCompGDeflateCodec"
+entry-points."zarr.codecs"."czarr.nvcomp_lz4" = "czarr.codecs:NvCompLZ4Codec"
+entry-points."zarr.codecs"."czarr.nvcomp_snappy" = "czarr.codecs:NvCompSnappyCodec"
+entry-points."zarr.codecs"."czarr.nvcomp_zstd" = "czarr.codecs:NvCompZstdCodec"
+
 [dependency-groups]
 dev = [
+  "iohub==0.3.0a4",
   "pre-commit",
   "twine>=4.0.2",
+  "ty>=0.0.12",
+  { include-group = "nb" },
 ]
 test = [
   "coverage>=7.10",
   "pytest",
   "pytest-cov",     # For VS Code’s coverage functionality
 ]
+nb = [ "jupyterlab>=4.5.2" ]
+
 doc = [
   "ipykernel",
   "ipython",
@@ -84,8 +122,31 @@ dependency-groups = [ "dev", "test" ]
 # If the matrix variable `deps` is set to "pre",
 # set the environment variable `UV_PRERELEASE` to "allow".
 matrix.deps.env-vars = [
-  { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
+  { key = "UV_PRERELEASE", value = "allow", if = [
+    "pre",
+  ] },
 ]
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "cu12" },
+    { extra = "cu13" },
+  ],
+]
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
+explicit = true
+
+[tool.uv.sources]
+rmm-cu12 = { index = "nvidia" }
+librmm-cu12 = { index = "nvidia" }
+rmm-cu13 = { index = "nvidia" }
+librmm-cu13 = { index = "nvidia" }
+
+# Mark cu12/cu13 as mutually-exclusive so uv can resolve each extra
+# independently (otherwise uv tries to satisfy both at once and fails).
 
 [tool.ruff]
 line-length = 120
@@ -137,9 +198,7 @@ addopts = [
 [tool.coverage.run]
 source = [ "czarr" ]
 patch = [ "subprocess" ]
-omit = [
-  "**/test_*.py",
-]
+omit = [ "**/test_*.py" ]
 
 [tool.cruft]
 skip = [
@@ -152,3 +211,5 @@ skip = [
   "docs/references.md",
   "docs/notebooks/example.ipynb",
 ]
+
+# RMM wheels are published on NVIDIA's index, not the public PyPI mirror.

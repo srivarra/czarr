@@ -1,0 +1,43 @@
+{
+  "template": "https://github.com/scverse/cookiecutter-scverse",
+  "commit": "af5404e37dd5144a952d2262665d5b78192d1da7",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "czarr",
+      "package_name": "czarr",
+      "project_description": "Decompress / Compress Zarr on the GPU",
+      "author_full_name": "Sricharan Reddy Varra",
+      "author_email": "sricharan.varra@biohub.org",
+      "github_user": "srivarra",
+      "github_repo": "czarr",
+      "license": "MIT License",
+      "ide_integration": true,
+      "_copy_without_render": [
+        ".github/workflows/build.yaml",
+        ".github/workflows/test.yaml",
+        "docs/_templates/autosummary/**.rst"
+      ],
+      "_exclude_on_template_update": [
+        "CHANGELOG.md",
+        "LICENSE",
+        "README.md",
+        "docs/api.md",
+        "docs/index.md",
+        "docs/notebooks/example.ipynb",
+        "docs/references.bib",
+        "docs/references.md",
+        "src/**",
+        "tests/**"
+      ],
+      "_render_devdocs": false,
+      "_jinja2_env_vars": {
+        "lstrip_blocks": true,
+        "trim_blocks": true
+      },
+      "_template": "https://github.com/scverse/cookiecutter-scverse",
+      "_commit": "af5404e37dd5144a952d2262665d5b78192d1da7"
+    }
+  },
+  "directory": null
+}
