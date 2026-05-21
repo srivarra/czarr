@@ -47,7 +47,7 @@ def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteReques
         return None
     offset, size = _resolve_byte_range(byte_range, st.st_size)
     if size == 0:
-        return prototype.buffer.from_bytes(b"")
+        return prototype.buffer.create_zero_length()
     with nvtx_range("czarr.GPULocalStore.cufile_read", size=size):
         dev = cp.empty(size, dtype=cp.uint8)
         n = cufile_runtime.read_into(path, int(dev.data.ptr), size, offset)
