@@ -87,3 +87,9 @@ class BitRound(ArrayArrayCodec):
             "name": self.codec_name,
             "configuration": {"keepbits": int(self.keepbits)},
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, JSON]) -> BitRound:
+        """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
+        cfg = data.get("configuration", {k: v for k, v in data.items() if k != "name"})
+        return cls(**cfg)

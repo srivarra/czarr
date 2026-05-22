@@ -63,3 +63,11 @@ class Shuffle(BytesBytesCodec):
             "name": self.codec_name,
             "configuration": {"elementsize": self.elementsize},
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, JSON]) -> Shuffle:
+        """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
+        if "configuration" in data:
+            return cls(**data["configuration"])
+        # Be tolerant of someone passing the raw configuration dict.
+        return cls(**{k: v for k, v in data.items() if k != "name"})

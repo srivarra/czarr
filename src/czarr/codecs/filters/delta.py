@@ -71,3 +71,9 @@ class Delta(ArrayArrayCodec):
         if self.astype is not None:
             config["astype"] = str(self.astype)
         return {"name": self.codec_name, "configuration": config}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, JSON]) -> Delta:
+        """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
+        cfg = data.get("configuration", {k: v for k, v in data.items() if k != "name"})
+        return cls(**cfg)
