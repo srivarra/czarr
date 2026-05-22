@@ -1,16 +1,20 @@
 """Base class + shared types for GPU codecs.
 
-A :class:`Codec` is a Zarr ``BytesBytesCodec`` that wraps an ``nvcomp.Codec``.
-Subclasses bind an :class:`_Algorithm` and optionally tweak:
+A :class:`CudaBytesBytesCodec` is a Zarr ``BytesBytesCodec`` that wraps
+an ``nvcomp.Codec``.  Subclasses bind an :class:`_Algorithm` and
+optionally tweak:
 
-* :attr:`Codec._bitstream_kind` — picks ``NVCOMP_NATIVE`` (default, max perf,
-  not interoperable with CPU codecs) or ``RAW`` / ``WITH_UNCOMPRESSED_SIZE``
-  (interoperable with the standard format produced by libzstd/liblz4/etc).
-* :attr:`Codec._frame_strip_head` / :attr:`Codec._frame_strip_tail` — bytes to
-  trim from each compressed chunk before handing to nvCOMP (gzip/zlib wrap
-  the deflate payload with header/trailer that nvCOMP doesn't parse).
-* :meth:`Codec._wrap_frame` / :meth:`Codec._unwrap_frame` — host-side hook
-  for codec-specific framing on encode/decode (CRC32 trailer for gzip,
+* :attr:`CudaBytesBytesCodec._bitstream_kind` — picks ``NVCOMP_NATIVE``
+  (default, max perf, not interoperable with CPU codecs) or ``RAW`` /
+  ``WITH_UNCOMPRESSED_SIZE`` (interoperable with the standard format
+  produced by libzstd/liblz4/etc).
+* :attr:`CudaBytesBytesCodec._frame_strip_head` /
+  :attr:`CudaBytesBytesCodec._frame_strip_tail` — bytes to trim from
+  each compressed chunk before handing to nvCOMP (gzip/zlib wrap the
+  deflate payload with header/trailer that nvCOMP doesn't parse).
+* :meth:`CudaBytesBytesCodec._wrap_frame` /
+  :meth:`CudaBytesBytesCodec._unwrap_frame` — host-side hook for
+  codec-specific framing on encode/decode (CRC32 trailer for gzip,
   Adler-32 trailer for zlib).
 """
 
@@ -41,7 +45,7 @@ if TYPE_CHECKING:
 
 
 class _Algorithm(StrEnum):
-    """nvCOMP algorithm names — private; users pick a Codec subclass instead."""
+    """nvCOMP algorithm names — private; users pick a CudaBytesBytesCodec subclass instead."""
 
     LZ4 = "LZ4"
     SNAPPY = "Snappy"
@@ -109,8 +113,11 @@ def _is_gpu_prototype(prototype: BufferPrototype) -> bool:
 
 
 @dataclass(frozen=True)
-class Codec(BytesBytesCodec):
-    """Base class for GPU codecs backed by nvCOMP.
+class CudaBytesBytesCodec(BytesBytesCodec):
+    """Base class for GPU-accelerated zarr ``BytesBytesCodec`` impls.
+
+    Wraps an ``nvcomp.Codec`` and translates Zarr's batched encode/decode
+    contract into nvCOMP calls.
 
     Concrete subclasses set the ``_algorithm`` ClassVar and the public
     ``codec_name`` (which determines the Zarr metadata ``name`` field — and

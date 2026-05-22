@@ -35,3 +35,4 @@ bench/logs/
 # libcufile auto-creates this in cwd
 cufile.log
 .gpustore_test_*
+.gpustore_talon_slice*

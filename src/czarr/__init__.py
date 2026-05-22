@@ -44,7 +44,7 @@ from czarr.codecs import (
     Bitcomp,
     Cascaded,
     Checksum,
-    Codec,
+    CudaBytesBytesCodec,
     Deflate,
     GDeflate,
     Gzip,
@@ -70,7 +70,7 @@ def configure_gpu(
     * Every ``arr[:]`` (and any other selection) decodes the whole chunk
       batch in a single nvCOMP call — sets ``codec_pipeline.batch_size``
       to ``sys.maxsize`` on zarr's default ``BatchedCodecPipeline`` so one
-      ``Codec.decode([all])`` runs per read.
+      ``CudaBytesBytesCodec.decode([all])`` runs per read.
     * Buffers default to GPU prototypes — :class:`zarr.core.buffer.gpu.Buffer`
       and ``gpu.NDBuffer``.  No more wrapping every call in
       ``zarr.config.set({"buffer": ...})``.
@@ -125,7 +125,7 @@ __all__ = [
     "Bitcomp",
     "Cascaded",
     "Checksum",
-    "Codec",
+    "CudaBytesBytesCodec",
     "Deflate",
     "GDeflate",
     "GPULocalStore",

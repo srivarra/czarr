@@ -1,23 +1,33 @@
-"""GPU codecs for Zarr — nvCOMP-backed.
+"""GPU codecs for Zarr v3 — nvCOMP-backed.
 
-Two families:
+* :mod:`czarr.codecs.compressors` — BytesBytesCodec implementations
+  (Zstd, LZ4, Gzip, Zlib, ANS, Bitcomp, Cascaded, Deflate, GDeflate,
+  Snappy).
+* :mod:`czarr.codecs.filters` — ArrayArrayCodec implementations
+  (populated in Phase 3 — Bitshuffle, Shuffle, Delta, FixedScaleOffset,
+  BitRound).
+* :mod:`czarr.codecs.checksum` — checksum BytesBytesCodecs (populated in
+  Phase 5 — Crc32c).
 
-* **Native** (:mod:`czarr.codecs.native`) — nvCOMP-only formats.  Maximum
-  throughput, but only consumable by another nvCOMP-using process.
-  Classes: :class:`ANS`, :class:`Bitcomp`, :class:`Cascaded`, :class:`GDeflate`.
-
-* **Compat** (:mod:`czarr.codecs.compat`) — standard bitstreams readable by
-  CPU implementations.  These shadow the corresponding stdlib codecs in
-  Zarr's registry once :func:`czarr.configure_gpu` is called, so existing
-  CPU-written zarr stores decode on the GPU transparently.
-  Classes: :class:`Zstd`, :class:`LZ4`, :class:`Gzip`, :class:`Zlib`.
+Public symbols are re-exported from this module so users can write
+``from czarr.codecs import Zstd`` (or just ``from czarr import Zstd``).
 """
 
 from zarr.registry import register_codec
 
-from czarr.codecs.base import Checksum, Codec
-from czarr.codecs.compat import LZ4, Gzip, Zlib, Zstd
-from czarr.codecs.native import ANS, Bitcomp, Cascaded, Deflate, GDeflate, Snappy
+from czarr.codecs.base import Checksum, CudaBytesBytesCodec
+from czarr.codecs.compressors import (
+    ANS,
+    LZ4,
+    Bitcomp,
+    Cascaded,
+    Deflate,
+    GDeflate,
+    Gzip,
+    Snappy,
+    Zlib,
+    Zstd,
+)
 
 # Register all codec classes with zarr's codec registry.  Compat codecs
 # shadow stdlib codec_ids ("zstd", "lz4", "gzip", "zlib"); native codecs
@@ -30,7 +40,7 @@ __all__ = [
     "Bitcomp",
     "Cascaded",
     "Checksum",
-    "Codec",
+    "CudaBytesBytesCodec",
     "Deflate",
     "GDeflate",
     "Gzip",

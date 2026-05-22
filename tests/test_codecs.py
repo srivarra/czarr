@@ -352,7 +352,7 @@ def test_resolve_stream_rejects_future_protocol_version():
 
 
 def test_get_stream_returns_explicit_stream_when_set():
-    """Codec built with an explicit stream should expose that exact handle."""
+    """CudaBytesBytesCodec built with an explicit stream should expose that exact handle."""
     s = cp.cuda.Stream(non_blocking=True)
     codec = LZ4(cuda_stream=s)
     assert codec.get_stream() == s.ptr
