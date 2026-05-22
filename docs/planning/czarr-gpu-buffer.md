@@ -6,7 +6,7 @@ Replace the cupy-ndarray-backed `zarr.core.buffer.gpu.Buffer` with a buffer wrap
 
 Today's GPU buffer is `zarr.core.buffer.gpu.Buffer(cupy_ndarray)`. That delivers `__cuda_array_interface__` but:
 
-1. **No alignment guarantee** beyond cupy's allocator default (256 bytes). cuFile direct I/O wants 4 KiB-aligned device pointers; we currently get them by luck.
+1. **No alignment guarantee** beyond cupy's allocator default (256 bytes). cuFile direct I/O wants 4 KiB-aligned device pointers; we currently get them by luck. (Phase 0 spike confirmed `DeviceMemoryResource` *also* fails this — it sub-allocates from a pool. `VirtualMemoryResource(addr_align=4096, gpu_direct_rdma=True)` is the primitive that actually delivers.)
 2. **No memory-class introspection** — `is_device_accessible` / `is_host_accessible` flags aren't first-class; codecs branch on `isinstance(chunk, gpu_buffer.Buffer)` which is fragile.
 3. **Lifetime is global RMM-pool-bound** — no per-stream `allocate(size, stream=s)` semantics. False dependencies between in-flight chunks.
 4. **Awkward bridge to cuFile** — current path goes `cupy.ndarray.data.ptr` (`int`), works but the buffer object itself can't be passed to a cuFile call directly.
@@ -16,7 +16,7 @@ Today's GPU buffer is `zarr.core.buffer.gpu.Buffer(cupy_ndarray)`. That delivers
 ## Locked decisions
 
 1. **New class** `czarr.core.buffer.CzarrGpuBuffer` — subclass of `zarr.core.buffer.core.Buffer` (the abstract), implementing the same protocol so zarr-pipeline code that handles `zarr.gpu.Buffer` also handles ours.
-2. **Backing store**: `cuda.core.Buffer` via either `DeviceMemoryResource` (default) or `PinnedMemoryResource` (host-staging path).
+2. **Backing store**: `cuda.core.Buffer` via `VirtualMemoryResource(addr_align=4096, gpu_direct_rdma=True)` (device, cuFile-direct path) or `LegacyPinnedMemoryResource` (host-staging path).  `DeviceMemoryResource` was the original plan but Phase 0 showed its sub-allocations are not page-aligned.
 3. **`__cuda_array_interface__` exposure**: synthesise CAI on the wrapper so existing nvCOMP / cupy interop keeps working zero-copy.
 4. **Allocator hookup**: `CzarrGpuBuffer.create(size, *, stream)` uses the active `czarr.pipeline.DeviceBufferPool` substrate.
 5. **Backwards compatibility**: keep `zarr.core.buffer.gpu.Buffer` workable too. Codecs accept either via duck-typing on CAI.
