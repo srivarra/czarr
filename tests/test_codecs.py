@@ -76,10 +76,14 @@ def test_lz4_compresses_zeros():
     np.testing.assert_array_equal(arr[:], data)
 
 
-def test_lz4_to_dict_from_dict_roundtrip():
+def test_lz4_to_dict_emits_numcodecs_schema():
+    """Compat codec ``to_dict`` should only emit fields the v3/numcodecs
+    LZ4 schema understands — czarr-internal knobs (chunk_size etc.) are
+    runtime, not persisted in metadata."""
     codec = LZ4(chunk_size=32768, checksum_policy=Checksum.COMPUTE_AND_VERIFY)
-    rebuilt = LZ4.from_dict(codec.to_dict())
-    assert rebuilt == codec
+    payload = codec.to_dict()
+    assert payload["name"] == "lz4"
+    assert set(payload["configuration"].keys()) == {"acceleration"}
 
 
 def test_lz4_roundtrip_gpu_prototype():
@@ -107,7 +111,7 @@ def test_lz4_to_dict_shape():
     payload = codec.to_dict()
     # Compat codec — shadows numcodecs.LZ4 under the standard codec_id "lz4".
     assert payload["name"] == "lz4"
-    assert payload["configuration"]["chunk_size"] == 65536
+    assert payload["configuration"]["acceleration"] == 1
 
 
 @pytest.mark.parametrize("codec_cls", ALL_CODEC_CLASSES, ids=lambda c: c.__name__)
@@ -140,6 +144,12 @@ def test_all_algorithms_entry_point_registered(codec_cls):
 
 @pytest.mark.parametrize("codec_cls", ALL_CODEC_CLASSES, ids=lambda c: c.__name__)
 def test_all_algorithms_dict_roundtrip(codec_cls):
+    # Compat codecs (Zstd, LZ4, Gzip, Zlib) only round-trip the
+    # numcodecs-schema fields in their metadata — czarr-internal runtime
+    # knobs (chunk_size etc.) are stripped on to_dict so non-czarr
+    # readers can open the store.  Test the native codecs here.
+    if codec_cls.__name__ in {"Zstd", "LZ4", "Gzip", "Zlib"}:
+        pytest.skip("compat codecs use a numcodecs-schema to_dict; not full round-trip")
     codec = codec_cls(chunk_size=32768)
     rebuilt = codec_cls.from_dict(codec.to_dict())
     assert rebuilt == codec
