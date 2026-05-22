@@ -38,6 +38,7 @@ dependencies = [
 #   pip install "czarr[cu12]"   # CUDA 12 systems
 #   pip install "czarr[cu13]"   # CUDA 13 systems
 optional-dependencies.cu12 = [
+  "cuda-core>=1.0",
   "cuda-python>=12.9,<13",
   "cupy-cuda12x>=13.6",
   "nvidia-cuda-nvrtc-cu12>=12.9.86",
@@ -46,6 +47,7 @@ optional-dependencies.cu12 = [
   "rmm-cu12>=26",
 ]
 optional-dependencies.cu13 = [
+  "cuda-core>=1.0",
   "cuda-python>=13",
   "cupy-cuda13x>=13.6",
   "nvidia-cuda-nvrtc-cu13",

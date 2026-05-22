@@ -10,11 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from czarr.codecs.base import Codec, _Algorithm
+from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm
 
 
 @dataclass(frozen=True)
-class ANS(Codec):
+class ANS(CudaBytesBytesCodec):
     """Asymmetric Numeral Systems — high throughput, balanced ratio."""
 
     codec_name: ClassVar[str] = "czarr.ans"
@@ -22,7 +22,7 @@ class ANS(Codec):
 
 
 @dataclass(frozen=True)
-class Bitcomp(Codec):
+class Bitcomp(CudaBytesBytesCodec):
     """Bitcomp — highest throughput on numeric data.
 
     ``algorithm_type``:
@@ -41,7 +41,7 @@ class Bitcomp(Codec):
 
 
 @dataclass(frozen=True)
-class Cascaded(Codec):
+class Cascaded(CudaBytesBytesCodec):
     """Cascaded — RLE + delta + bit-packing for integer columns."""
 
     codec_name: ClassVar[str] = "czarr.cascaded"
@@ -60,7 +60,7 @@ class Cascaded(Codec):
 
 
 @dataclass(frozen=True)
-class Snappy(Codec):
+class Snappy(CudaBytesBytesCodec):
     """nvCOMP Snappy — chunked nvCOMP-native bitstream.
 
     NOT bytewise-compatible with the standard Snappy block format.  Listed
@@ -72,7 +72,7 @@ class Snappy(Codec):
 
 
 @dataclass(frozen=True)
-class Deflate(Codec):
+class Deflate(CudaBytesBytesCodec):
     """Raw deflate (RFC 1951) — nvCOMP-native chunked bitstream.
 
     For CPU-interop deflate use :class:`czarr.Gzip` or :class:`czarr.Zlib`
@@ -91,7 +91,7 @@ class Deflate(Codec):
 
 
 @dataclass(frozen=True)
-class GDeflate(Codec):
+class GDeflate(CudaBytesBytesCodec):
     """nvCOMP GDeflate — chunked deflate variant optimised for GPU parallelism.
 
     NOT bitstream-compatible with standard deflate/gzip.  Use :class:`Gzip`
