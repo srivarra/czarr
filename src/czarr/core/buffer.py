@@ -1,0 +1,294 @@
+"""``cuda.core.Buffer``-backed Zarr buffers.
+
+`CzarrGpuBuffer` and `CzarrGpuNDBuffer` are drop-in replacements for
+``zarr.core.buffer.gpu.Buffer`` / ``...gpu.NDBuffer`` that allocate
+device memory through ``cuda.core``'s
+``VirtualMemoryResource(addr_align=4096, gpu_direct_rdma=True)`` so the
+underlying device pointer is 4 KiB-aligned and tagged GPU-direct-RDMA.
+That is exactly what cuFile direct I/O wants, and it gives us a clean
+substrate for Phase 3 (register-once cuFile).
+
+The wrapper holds a ``cupy.ndarray`` view that was imported zero-copy
+from the producer via DLPack. cupy's DLPack import takes a reference to
+the producer's deleter, so the lifetime of the underlying
+``cuda.core.Buffer`` follows the cupy view automatically — we never
+call ``close()`` directly, which keeps slicing safe.
+
+``__cuda_array_interface__`` is synthesised on the wrapper so nvCOMP /
+Zarr code that consumes CAI can wrap the buffer zero-copy without going
+through the cupy view first.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Literal, cast
+
+import cupy as cp
+import numpy as np
+import numpy.typing as npt
+from cuda.core import (
+    Device,
+    LegacyPinnedMemoryResource,
+    VirtualMemoryResource,
+    VirtualMemoryResourceOptions,
+)
+from zarr.core.buffer import core
+from zarr.core.buffer.core import ArrayLike, BufferPrototype, NDArrayLike
+from zarr.registry import register_buffer, register_ndbuffer
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import Self
+
+    from cuda.core import Stream
+    from zarr.core.common import BytesLike
+
+
+_DEVICE_MR: VirtualMemoryResource | None = None
+_PINNED_MR: LegacyPinnedMemoryResource | None = None
+
+
+def _device_mr() -> VirtualMemoryResource:
+    """Lazy singleton for the 4 KiB-aligned device allocator.
+
+    ``VirtualMemoryResource`` is the only ``cuda.core`` allocator that
+    delivers a fresh 4 KiB-aligned virtual address per call (verified
+    in ``bench/buffer/alignment_probe.py``). The cost is granularity:
+    every allocation pads up to the device's VMM granularity (commonly
+    2 MiB on Hopper / Ampere). Phase 5 bench will tell us whether we
+    want to slab + sub-allocate on top.
+    """
+    global _DEVICE_MR
+    if _DEVICE_MR is None:
+        dev = Device()
+        dev.set_current()
+        _DEVICE_MR = VirtualMemoryResource(
+            dev,
+            VirtualMemoryResourceOptions(addr_align=4096, gpu_direct_rdma=True),
+        )
+    return _DEVICE_MR
+
+
+def _pinned_mr() -> LegacyPinnedMemoryResource:
+    """Lazy singleton for the legacy (stream-free) pinned host allocator."""
+    global _PINNED_MR
+    if _PINNED_MR is None:
+        dev = Device()
+        dev.set_current()
+        _PINNED_MR = LegacyPinnedMemoryResource(dev)
+    return _PINNED_MR
+
+
+def _current_stream() -> Stream:
+    return Device().default_stream
+
+
+class CzarrGpuBuffer(core.Buffer):
+    """A flat byte buffer backed by a ``cuda.core.Buffer``.
+
+    For freshly-allocated buffers the underlying device pointer is
+    4 KiB-aligned and tagged GPU-direct-RDMA. Slices and combined
+    buffers share or copy from those allocations and are not
+    necessarily aligned themselves; check ``device_ptr % 4096`` if you
+    plan to feed a slice to cuFile.
+    """
+
+    def __init__(self, array_like: ArrayLike) -> None:
+        # The ABC requires us to accept a 1-D byte array_like. We honour
+        # that for compatibility with code that constructs the buffer
+        # directly from a cupy / numpy slice; the primary entry point
+        # callers should use is ``CzarrGpuBuffer.empty``.
+        arr = cp.asarray(array_like)
+        if arr.ndim != 1:
+            raise ValueError("CzarrGpuBuffer: only 1-dim array_like allowed")
+        if arr.dtype != np.dtype("B") and arr.dtype != np.dtype("int8"):
+            raise ValueError(f"CzarrGpuBuffer: only byte dtype allowed, got {arr.dtype}")
+        # Always present as uint8 so downstream code sees one dtype.
+        self._data: cp.ndarray = arr.view(cp.uint8)
+
+    # ------------------------------------------------------------------
+    # construction
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def empty(cls, size: int, *, stream: Stream | None = None) -> Self:
+        """Allocate a fresh ``size``-byte buffer from the VMR device pool."""
+        if size < 0:
+            raise ValueError(f"size must be non-negative, got {size}")
+        if size == 0:
+            return cls.create_zero_length()
+        s = stream or _current_stream()
+        cuda_buf = _device_mr().allocate(size, stream=s)
+        # cupy holds a reference to the producer (cuda.core.Buffer) via
+        # DLPack; the view stays valid for our wrapper's lifetime and
+        # the deleter runs when the cupy view is GC'd.
+        full = cp.from_dlpack(cuda_buf).view(cp.uint8)
+        return cls(full[:size])
+
+    @classmethod
+    def create_zero_length(cls) -> Self:
+        """Empty 0-byte buffer — no device allocation."""
+        return cls(cp.empty(0, dtype=cp.uint8))
+
+    @classmethod
+    def from_array_like(cls, array_like: ArrayLike) -> Self:
+        """Wrap a CAI- or DLPack-compatible array.
+
+        If the source is already a cupy uint8 1-D view, we wrap it
+        zero-copy. Otherwise we copy into a fresh VMR-backed buffer so
+        the result has the alignment / RDMA guarantees CzarrGpuBuffer
+        promises for freshly-allocated buffers.
+        """
+        src = cp.asarray(array_like).view(cp.uint8).ravel()
+        if int(src.data.ptr) % 4096 == 0:
+            return cls(src)
+        out = cls.empty(int(src.size))
+        out._data[:] = src
+        return out
+
+    @classmethod
+    def from_buffer(cls, buffer: core.Buffer) -> Self:
+        """Wrap or copy an arbitrary zarr Buffer; zero-copy when already ours."""
+        if isinstance(buffer, cls):
+            return buffer
+        return cls.from_array_like(buffer.as_array_like())
+
+    @classmethod
+    def from_bytes(cls, bytes_like: BytesLike) -> Self:
+        """Copy host bytes into a fresh aligned device buffer."""
+        host = np.frombuffer(bytes_like, dtype=np.uint8)
+        if host.size == 0:
+            return cls.create_zero_length()
+        out = cls.empty(int(host.size))
+        out._data.set(host)
+        return out
+
+    # ------------------------------------------------------------------
+    # zarr Buffer protocol
+    # ------------------------------------------------------------------
+
+    def as_numpy_array(self) -> npt.NDArray[Any]:
+        """Copy device bytes to a fresh numpy array."""
+        return cast("npt.NDArray[Any]", cp.asnumpy(self._data))
+
+    def combine(self, others: Iterable[core.Buffer]) -> Self:
+        """Concatenate self + ``others`` into a fresh aligned device buffer."""
+        parts = [self._data]
+        for other in others:
+            parts.append(cp.asarray(other.as_array_like()).view(cp.uint8))
+        total = int(sum(p.size for p in parts))
+        out = type(self).empty(total)
+        offset = 0
+        for p in parts:
+            n = int(p.size)
+            out._data[offset : offset + n] = p
+            offset += n
+        return out
+
+    # ------------------------------------------------------------------
+    # cuda.core extras
+    # ------------------------------------------------------------------
+
+    @property
+    def device_ptr(self) -> int:
+        """Raw device pointer.
+
+        For buffers allocated via ``empty`` (or copied through
+        ``from_array_like`` / ``from_bytes``) this is 4 KiB-aligned.
+        Slice-views inherit the parent's pointer plus the slice offset.
+        """
+        if self._data.size == 0:
+            return 0
+        return int(self._data.data.ptr)
+
+    @property
+    def is_device_accessible(self) -> bool:
+        """True when the buffer holds device memory we can read from the GPU."""
+        return self._data.size > 0
+
+    @property
+    def is_host_accessible(self) -> bool:
+        """Always False — device path; pinned host buffers come in a follow-up."""
+        return False
+
+    @property
+    def __cuda_array_interface__(self) -> dict[str, Any]:
+        """Synthesise CAI v3 over the logical byte range.
+
+        ``cuda.core.Buffer`` does not expose CAI natively; we build it
+        from the cupy view's pointer + size so that nvCOMP and other
+        CAI consumers can wrap the buffer directly.
+        """
+        return {
+            "version": 3,
+            "shape": (int(self._data.size),),
+            "typestr": "|u1",
+            "data": (self.device_ptr, False),
+            "strides": None,
+            "stream": None,
+        }
+
+
+class CzarrGpuNDBuffer(core.NDBuffer):
+    """n-dimensional GPU buffer.
+
+    Backed by a plain ``cupy.ndarray``. NDBuffers carry decoded array
+    payloads and don't see cuFile, so the 4 KiB-alignment / RDMA flag
+    matters only for the flat ``CzarrGpuBuffer`` that the cuFile path
+    writes into.
+    """
+
+    def __init__(self, array: NDArrayLike) -> None:
+        if array.dtype == object:
+            raise ValueError("CzarrGpuNDBuffer: object dtype not supported")
+        self._data: NDArrayLike = cp.asarray(array)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        shape: Iterable[int],
+        dtype: npt.DTypeLike,
+        order: Literal["C", "F"] = "C",
+        fill_value: Any | None = None,
+    ) -> Self:
+        """New cupy-backed ndbuffer; ``fill_value`` is applied when not None."""
+        arr = cp.empty(shape=tuple(shape), dtype=dtype, order=order)
+        if fill_value is not None:
+            arr.fill(fill_value)
+        return cls(arr)
+
+    @classmethod
+    def empty(cls, shape: tuple[int, ...], dtype: npt.DTypeLike, order: Literal["C", "F"] = "C") -> Self:
+        """Uninitialised cupy-backed ndbuffer."""
+        return cls(cp.empty(shape=shape, dtype=dtype, order=order))
+
+    @classmethod
+    def from_numpy_array(cls, array_like: npt.ArrayLike) -> Self:
+        """H2D copy via ``cp.asarray``."""
+        return cls(cp.asarray(array_like))
+
+    @classmethod
+    def from_ndarray_like(cls, ndarray_like: NDArrayLike) -> Self:
+        """Wrap / coerce an existing ndarray-like to cupy."""
+        return cls(cp.asarray(ndarray_like))
+
+    def as_numpy_array(self) -> npt.NDArray[Any]:
+        """Copy device data back to numpy."""
+        return cast("npt.NDArray[Any]", cp.asnumpy(self._data))
+
+    def __getitem__(self, key: Any) -> Self:
+        return type(self)(self._data.__getitem__(key))
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        if isinstance(value, CzarrGpuNDBuffer):
+            value = value._data
+        elif isinstance(value, core.NDBuffer):
+            value = cp.asarray(value.as_ndarray_like())
+        self._data.__setitem__(key, value)
+
+
+buffer_prototype = BufferPrototype(buffer=CzarrGpuBuffer, nd_buffer=CzarrGpuNDBuffer)
+
+register_buffer(CzarrGpuBuffer, qualname="czarr.core.buffer.CzarrGpuBuffer")
+register_ndbuffer(CzarrGpuNDBuffer, qualname="czarr.core.buffer.CzarrGpuNDBuffer")
