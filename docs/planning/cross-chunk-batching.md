@@ -1,121 +1,143 @@
 # cross-chunk batching at the pipeline layer
 
-Batch ALL chunks of one `arr[...]` selection into a single per-codec call so per-chunk Python dispatch becomes per-selection. This is the next blocker for H100/H200 throughput.
+Batch ALL chunk reads of one `arr[...]` selection into a single cuFile call so per-chunk Python dispatch becomes per-selection. This is the next blocker for H100/H200 throughput.
 
 ## Motivation
 
-Today's read flow inside `zarr.core.codec_pipeline.BatchedCodecPipeline.read_batch` looks like:
+**Phase 0 measurement** (cProfile on the 2048-chunk 32 KiB workload, A40):
 
 ```
-concurrent_map: get_byte_getter(chunk_i).get()  ─► chunk_bytes_i   ← parallel I/O ✓
-decode_batch:   bb_codec.decode([(bytes_0, spec_0), ..., (bytes_N, spec_N)])
-                  └─► CudaBytesBytesCodec._batch_sync handles them as one nvcomp.decode call ✓
+ncalls  tottime    percall  function
+4096    3.216 s    0.8 ms   cufile_runtime.registered_handle   ← 50% of wall time
+2048    1.591 s    0.8 ms   cufile_runtime.read_into
+2048    1.140 s    0.6 ms   posix.open
+   1    0.051 s   51.0 ms   _batch_sync (codec)                ← codec is fine
 ```
 
-That's already batched in theory. **In practice** the per-chunk loop in `_batch_sync` still dominates because:
+The bottleneck is **not in the codec**. Decode finishes in 51 ms for the whole batch. The fixed Python overhead is **per-chunk cuFile handle register/deregister + open/close**, totalling 6 seconds for 2048 chunks at ~3 ms each.
 
-- `bytes(chunk.to_bytes())` per chunk → host materialise (CzarrPipeline skips this for gpu.Buffer, but the loop still allocates an nvcomp.Array per chunk).
-- `nvcomp.as_array(...)` per chunk: ~50 µs Python overhead per chunk.
-- `cp.empty(spec.dtype...)` per chunk for the output buffer: ~10 µs each.
-- Output wrapping via `prototype.buffer.from_array_like(dev)` per chunk: ~20 µs each.
+Today's read flow:
 
-At 1024 chunks × 80 µs per chunk = 80 ms of fixed Python overhead, regardless of how fast the underlying nvCOMP call is. On A40 with slow decode this is hidden; on H100/H200 with 20 GiB/s nvCOMP, it's the wall.
+```
+concurrent_map(N chunks):
+    for each chunk i (in a thread):
+        byte_getter_i.get(prototype)
+          └─► GPULocalStore.get(key, prototype)
+               └─► _gds_get_sync:
+                    fd = os.open(path)                       ← 0.6 ms / chunk
+                    with registered_handle(fd):              ← 0.8 ms / chunk
+                        cufile.read(h, dev_ptr, size, ...)   ← 0.8 ms / chunk
+                    os.close(fd)
+                    return gpu.Buffer(...)
 
-H100 small-chunk slowdown (0.86×) measured in `pipeline_compare.py` was this exact effect.
+(N × ~3 ms overhead, all before any codec work runs)
+
+decode_batch:
+    bb_codec.decode([N items])    ← ONE nvCOMP call, 51 ms ✓
+```
+
+CzarrPipeline already batches at the codec layer. The wall is the **storage layer** doing per-chunk fd management.
 
 ## Locked decisions
 
-1. **Don't change zarr's BatchedCodecPipeline API** — override `decode_batch` / `encode_batch` only inside `CzarrPipeline`.
-2. **Coalesce by chunk-spec-equality**: chunks with identical specs (same dtype, shape, prototype) share one big device output buffer; we view-slice on the way out.
-3. **Single nvcomp.Codec.decode call** per BB-codec for the entire batch — already the contract of nvcomp, just need to feed it a flat list of inputs/outputs.
-4. **Output sliced views**, not per-chunk Buffer objects, until the very end of the pipeline. Saves the `from_array_like` per-chunk cost.
-5. **Keep `_batch_sync` semantics** for callers that pass a single chunk — the batching is purely an internal coalescing.
+1. **Batch at the storage layer**, not the codec layer (codec is already fine).
+2. **Add `GPULocalStore.get_many(keys, prototype)`** that opens all fds, registers all handles, issues parallel cuFile reads, then deregisters/closes — *one* batched I/O round-trip for an entire selection.
+3. **Override `CzarrPipeline.read_batch`** to call `get_many` instead of zarr's per-chunk `concurrent_map`. Single override; existing per-chunk `get` path stays for non-CzarrPipeline callers.
+4. **Try cuFile's batched API** (`cuFileBatchIOSetUp` + `Submit` + `GetStatus`) as the inner mechanism. Project memory says batched lost on Bruno NFS for *large* chunks; per-chunk overhead dominates for *small* chunks, so the trade-off swings the other way here. Validate empirically in Phase 1.
+5. **Fall-back path**: if cuFile batched I/O doesn't win, use a threadpool with **pre-registered handles** (open + register once for all fds before any read, then read in parallel, deregister + close at the end). Same algorithmic shape, dumber implementation.
+6. **Symmetric for writes** — `set_many` plus `CzarrPipeline.write_batch`.
 
 ## Architecture
 
 ```
-CzarrPipeline.decode_batch(chunks_and_specs):
+CzarrPipeline.read_batch(batch_info, out, drop_axes):
     │
-    ├── Group by (codec_id, dtype, output_shape, prototype) key.
-    │   Each group becomes one "macro batch".
+    ├── Extract all ByteGetter keys + prototypes (one pass over batch_info).
     │
-    ├── For each macro batch:
-    │   │
-    │   ├── Build a flat list of nvcomp.Array views from the input chunk
-    │   │   buffers (1 cp.array_from_dlpack OR 1 batched H2D if host inputs).
-    │   │
-    │   ├── Allocate ONE device buffer of size = sum(chunk.nbytes for c in batch).
-    │   │   Hand nvcomp pre-sliced device output views into it.
-    │   │
-    │   ├── codec.decode(nv_inputs, out=nv_output_views)   ← single call
-    │   │
-    │   └── Slice the device buffer back into per-chunk Buffer wrappers
-    │       (cheap — these are zero-copy views, not allocations).
+    ├── If all byte_getters resolve to the same GPULocalStore:
+    │       chunk_bytes = await store.get_many(keys, prototype)
+    │   else:
+    │       chunk_bytes = await concurrent_map(...)        ← existing path
     │
-    └── Return assembled list in original order.
+    ├── decode_batch(zip(chunk_bytes, specs))              ← unchanged; already batched
+    │
+    └── per-chunk assembly into out[...]                    ← unchanged
+
+GPULocalStore.get_many(keys, prototype):
+    │
+    ├── if cuFile batched API available and `len(keys) > 1`:
+    │       _batched_cufile_read(keys, prototype)
+    │   else:
+    │       _threaded_get_many_with_handle_reuse(keys, prototype)
+    │
+    └── return list[Buffer]
+
+_batched_cufile_read(keys, prototype):
+    fds        = [os.open(path) for path in keys]            ← still per-fd, batched syscall would be nicer
+    handles    = cufile_runtime.handle_register_many(fds)
+    bufs       = [prototype.buffer.empty(size) for size in sizes]   ← allocated up-front
+    cufile_runtime.batch_submit(handles, bufs, offsets, sizes)
+    cufile_runtime.batch_wait()
+    cufile_runtime.handle_deregister_many(handles)
+    [os.close(fd) for fd in fds]
+    return bufs
 ```
 
-Allocation strategy:
-
-```
-device_buffer_pool.acquire(total_size, stream)
-    └── single RMM alloc, lives for the call
-    └── per-chunk views = uint8 slices into it
-    └── codec writes directly into the views (nvcomp respects out= ptrs)
-```
+The expensive bit (register/deregister) goes from 0.8 ms × N to 0.8 ms × 1 (one batched syscall).  The cuFile read itself happens in parallel inside the driver.
 
 ## Phases
 
-### Phase 0 — measure the gap
+### Phase 0 — measure the gap ✅
 
-- Profile current `_batch_sync` with `nsys`:
-  - One frame: arr[...] on a 256-small-chunk workload on H100.
-  - Confirm Python overhead per chunk vs nvcomp_decode duration.
-- Document baseline in `docs/planning/batching-baseline.md` with the nsys timeline screenshot or pre/post stats table.
+- `bench/zarr/profile_smallchunk.py` cProfile run on A40, 2048-chunk workload.
+- **Finding**: cuFile register/deregister/open/close = ~6 s of 6.4 s wall time. Codec is 51 ms. Bottleneck is the **storage** layer, not the codec layer.
+- Phase 1 plan pivoted from "decode_batch coalescing" to "batched cuFile reads via GPULocalStore.get_many".
 
-Deliverable: numbers proving where the time goes. Sanity-check the hypothesis before refactoring.
+Deliverable: profile + redirected plan. **DONE.**
 
-### Phase 1 — `decode_batch` coalescing
+### Phase 1 — `GPULocalStore.get_many` (threaded with pre-registered handles)
 
-- Override `CzarrPipeline.decode_batch`.
-- Implement chunk-spec grouping + single-buffer allocation + sliced output views.
-- Pass single-group path through unchanged (1 chunk = same as today).
-- Tests: end-to-end byte equality vs current path on multi-chunk reads (no chunk-spec variation).
+- New method `GPULocalStore.get_many(keys: Sequence[str], prototype) -> Sequence[Buffer | None]`.
+- Inner mechanism: thread-pool that opens + registers all handles upfront, issues parallel `cufile.read` calls, then deregisters + closes in one pass at the end.
+- Avoids the cuFile batched API for now — simpler, same algorithmic shape, easy to validate.
+- Tests: byte-equality vs the existing `get` loop on a real store.
 
-Deliverable: same correctness, fewer Python calls per selection.
+Deliverable: 2048-chunk read goes from 6.4 s → expected sub-1 s on A40.
 
-### Phase 2 — `encode_batch` symmetry
+### Phase 2 — `CzarrPipeline.read_batch` override
 
-- Same coalescing for write path.
+- Override `read_batch` in `CzarrPipeline`.
+- When all byte-getters resolve to the same `GPULocalStore`, call `store.get_many(...)` once.
+- Otherwise fall through to zarr's default `concurrent_map`-based path.
+- Re-use the existing `decode_batch` / assembly downstream.
+
+Deliverable: pipeline routes multi-chunk reads through the batched storage path automatically.
+
+### Phase 3 — cuFile batched API attempt
+
+- Try `cuFileBatchIOSetUp` + `cuFileBatchIOSubmit` + `cuFileBatchIOGetStatus`.
+- Compare vs the threaded handle-reuse path from Phase 1 (same workload).
+- If batched API wins, swap; if it loses, document the regime where threaded wins and keep the threaded path. Project memory says batched lost on Bruno NFS for *large* chunks; this is the opposite size regime, so the answer may flip.
+
+Deliverable: empirical decision on which inner mechanism wins for small-chunk workloads.
+
+### Phase 4 — `set_many` symmetry
+
+- Same architecture for writes: `GPULocalStore.set_many(keys, buffers)` + `CzarrPipeline.write_batch` override.
 - Tests: round-trip on multi-chunk writes.
 
-Deliverable: writes also batched at the macro level.
+Deliverable: writes also batched at the storage layer.
 
-### Phase 3 — handle heterogeneous batches
+### Phase 5 — bench
 
-- When chunks have differing specs (rare but possible — edge chunks in a non-uniform shard, or mixed-dtype filter outputs):
-  - Multiple macro batches, each homogeneous.
-  - Still one nvcomp call per macro batch.
-
-Deliverable: correctness in the edge-chunk case.
-
-### Phase 4 — bench
-
-- Rerun `bench.zarr.pipeline_sweep` on H100 + H200 with the new path.
+- Rerun `bench.zarr.pipeline_sweep` on A40 / H100 / H200 with the batched store path.
 - Expected wins:
-  - H100 small chunks: 0.86× → 1.5× or better (eliminate the small-chunk regression).
-  - H100 medium chunks: 1.07× → 1.3-1.5×.
-  - Large chunks: marginal — nvCOMP decode already dominates there.
-- Rerun `bench.zarr.slice_compare` for the headline GPU-vs-CPU number — expected to climb above 6.41×.
+  - **Small chunks: ~6× speedup** (the bottleneck Phase 0 found gets cleared).
+  - Medium chunks: 1.5-2× (proportional cuFile overhead, smaller).
+  - Large chunks: marginal (cuFile overhead amortised across few large reads).
+- Rerun `bench.zarr.slice_compare` — headline expected to climb above 6.41× on H100.
 
-Deliverable: documented headline numbers in `docs/planning/batching-results.md`.
-
-### Phase 5 — propagate to filter chain
-
-- Filters (`Shuffle`, `Delta`, `FixedScaleOffset`, `BitRound`) also go through `_decode_single` per chunk.
-- Same coalescing applied to ArrayArrayCodec batches.
-
-Deliverable: filter chain also batched.
+Deliverable: documented numbers in `docs/planning/batching-results.md`.
 
 ## Out of scope
 

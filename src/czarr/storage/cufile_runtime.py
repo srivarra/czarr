@@ -18,6 +18,7 @@ import ctypes
 import os
 import threading
 import weakref
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
 import cupy as cp
@@ -130,6 +131,99 @@ def read_into(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:
             return cufile.read(h, dev_ptr, size, file_offset, 0)
     finally:
         os.close(fd)
+
+
+def read_into_many(
+    requests: list[tuple[object, int, int, int]],
+    *,
+    max_workers: int | None = None,
+) -> list[int]:
+    """Batched cuFile reads with pre-registered handles + threaded dispatch.
+
+    Per-chunk profiling showed ~3 ms of fixed overhead per call to
+    :func:`read_into` (open + handle_register + read + handle_deregister
+    + close).  For multi-chunk reads the register/deregister fraction
+    dominates.  This entry point pays the per-fd setup costs up front,
+    issues all the actual reads in parallel via a threadpool, then tears
+    everything down in one pass.
+
+    Parameters
+    ----------
+    requests
+        Sequence of ``(path, dev_ptr, size, file_offset)`` tuples.
+        ``size`` may be zero — those entries return 0 without I/O.
+    max_workers
+        Thread-pool size.  ``None`` (default) lets ``ThreadPoolExecutor``
+        pick (``min(32, cpu_count + 4)``).
+
+    Returns
+    -------
+    list[int]
+        One byte count per request, in input order.  Missing files raise
+        ``FileNotFoundError`` synchronously — same semantics as
+        :func:`read_into`.
+    """
+    if not requests:
+        return []
+    ensure_driver_open()
+
+    n = len(requests)
+    fds: list[int | None] = [None] * n
+    handles: list[object | None] = [None] * n
+    descrs: list[object | None] = [None] * n
+
+    try:
+        # Phase 1: serial open + register.  Tried parallelising this with
+        # a ThreadPoolExecutor — on Bruno's VAST NFS it regressed
+        # (cufile.handle_register holds a driver-level lock; threads just
+        # added scheduling overhead).  Keep serial; the real speedup
+        # source is the parallel-read phase plus future cuFile batched I/O.
+        for i, (path, _dev_ptr, size, _offset) in enumerate(requests):
+            if size == 0:
+                continue
+            fd = os.open(os.fspath(path), os.O_RDONLY)
+            descr = cufile.Descr()
+            s = _CUfileDescr.from_address(int(descr))
+            s.type = int(cufile.FileHandleType.OPAQUE_FD)
+            s.handle.fd = fd
+            s.fs_ops = 0
+            handles[i] = cufile.handle_register(int(descr))
+            fds[i] = fd
+            descrs[i] = descr
+
+        # Phase 2: parallel reads.  cuFile read internally releases the
+        # GIL during the syscall, so this scales with thread count up to
+        # what the driver's submission queue allows.
+        results: list[int] = [0] * n
+
+        def _do_read(i: int) -> int:
+            _path, dev_ptr, size, file_offset = requests[i]
+            h = handles[i]
+            if size == 0 or h is None:
+                return 0
+            return cufile.read(h, dev_ptr, size, file_offset, 0)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            for i, r in zip(range(n), ex.map(_do_read, range(n)), strict=True):
+                results[i] = r
+
+        return results
+    finally:
+        # Phase 3: deregister + close everything we touched.
+        for h in handles:
+            if h is None:
+                continue
+            try:
+                cufile.handle_deregister(h)
+            except cufile.cuFileError:
+                pass
+        for fd in fds:
+            if fd is None:
+                continue
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def write_from(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:

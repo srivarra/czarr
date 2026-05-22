@@ -16,6 +16,7 @@ from czarr._nvtx import nvtx_range
 from czarr.storage import cufile_runtime
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from zarr.abc.store import ByteRequest
@@ -56,6 +57,73 @@ def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteReques
         # only at EOF or hardware error.
         dev = dev[:n]
     return prototype.buffer.from_array_like(dev)
+
+
+def _gds_get_many_sync(
+    paths: list[Path],
+    prototype: BufferPrototype,
+    byte_ranges: list[ByteRequest | None],
+) -> list[Buffer | None]:
+    """Allocate per-key device buffers + one batched cuFile read.
+
+    Returns ``None`` for any path that doesn't exist; matches
+    :func:`_gds_get_sync` semantics per slot.
+    """
+    # Resolve every (offset, size); also detect missing files up-front so
+    # we don't half-set the cuFile batch and then have to unwind.
+    requests: list[tuple[Path, int, int, int] | None] = []
+    sizes: list[int] = []
+    for path, br in zip(paths, byte_ranges, strict=True):
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            requests.append(None)
+            sizes.append(-1)
+            continue
+        offset, size = _resolve_byte_range(br, st.st_size)
+        requests.append((path, offset, size, st.st_size))
+        sizes.append(size)
+
+    # Per-key device buffers — empty for zero-length and missing slots so
+    # downstream code can still index by position.
+    bufs: list[Buffer | None] = []
+    devs: list[cp.ndarray | None] = []
+    for size, req in zip(sizes, requests, strict=True):
+        if req is None:
+            bufs.append(None)
+            devs.append(None)
+        elif size == 0:
+            bufs.append(prototype.buffer.create_zero_length())
+            devs.append(None)
+        else:
+            dev = cp.empty(size, dtype=cp.uint8)
+            devs.append(dev)
+            bufs.append(prototype.buffer.from_array_like(dev))
+
+    # Build the flat batched-read request list (skip missing slots).
+    submit: list[tuple[Path, int, int, int]] = []
+    submit_indices: list[int] = []
+    for i, (size, req, dev) in enumerate(zip(sizes, requests, devs, strict=True)):
+        if req is None or size <= 0 or dev is None:
+            continue
+        path, offset, _size, _file_size = req
+        submit.append((path, int(dev.data.ptr), size, offset))
+        submit_indices.append(i)
+
+    if not submit:
+        return bufs
+
+    with nvtx_range("czarr.GPULocalStore.cufile_batched_read", n=len(submit)):
+        results = cufile_runtime.read_into_many(submit)
+
+    # If cuFile returned a short count for any slot, truncate the cupy
+    # buffer (matches the per-slot logic in _gds_get_sync).
+    for slot_idx, n in zip(submit_indices, results, strict=True):
+        if n != sizes[slot_idx]:
+            dev = devs[slot_idx][:n]
+            bufs[slot_idx] = prototype.buffer.from_array_like(dev)
+
+    return bufs
 
 
 def _gds_set_sync(path: Path, value: Buffer) -> None:
@@ -113,6 +181,46 @@ class GPULocalStore(LocalStore):
             return await asyncio.to_thread(_gds_get_sync, path, prototype, byte_range)
         except FileNotFoundError:
             return None
+
+    async def get_many(
+        self,
+        keys: Sequence[str],
+        prototype: BufferPrototype | None = None,
+        byte_ranges: Sequence[ByteRequest | None] | None = None,
+    ) -> list[Buffer | None]:
+        """Batched read of many keys via a single cuFile-handle setup pass.
+
+        Falls back to a list of :meth:`get` calls when prototype is host
+        or cuFile is unavailable.  When the GPU prototype is requested,
+        all device buffers are allocated up-front, then one batched
+        :func:`czarr.storage.cufile_runtime.read_into_many` call services
+        every read with pre-registered handles — eliminating the per-key
+        ``open + register + deregister + close`` cycle that dominates
+        small-chunk workloads (see Phase 0 measurements).
+
+        Missing files come back as ``None`` in their slot (matching
+        :meth:`get`).  Caller is responsible for slicing if any byte
+        range is partial.
+        """
+        if prototype is None:
+            prototype = default_buffer_prototype()
+        if not self._is_open:
+            await self._open()
+        if byte_ranges is None:
+            byte_ranges = [None] * len(keys)
+        if len(byte_ranges) != len(keys):
+            raise ValueError(f"byte_ranges length {len(byte_ranges)} != keys length {len(keys)}")
+        if not self._gds_available or not _gpu_prototype_requested(prototype):
+            # Per-key fan-out via asyncio.gather — same as zarr's default.
+            return list(
+                await asyncio.gather(*(self.get(k, prototype, br) for k, br in zip(keys, byte_ranges, strict=True)))
+            )
+        return await asyncio.to_thread(
+            _gds_get_many_sync,
+            [self.root / k for k in keys],
+            prototype,
+            list(byte_ranges),
+        )
 
     async def set(self, key: str, value: Buffer) -> None:
         """Write a Buffer to a key; uses cuFile when value is a gpu Buffer."""
