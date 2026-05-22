@@ -88,16 +88,17 @@ def test_from_bytes_round_trip() -> None:
         del buf
 
 
-def test_from_array_like_copies_aligned() -> None:
-    # Build on host then push to device to avoid cupy JIT (the cluster
-    # has CUDA 13.1 system libs but CuPy is built against cu12, so any
-    # JIT-triggering cupy op fails on libnvrtc.so.12 lookup).
+def test_from_array_like_wraps_zero_copy() -> None:
+    # ``from_array_like`` is the codec-decode path: it must wrap
+    # without copying, so the resulting buffer shares the source's
+    # device pointer. Alignment is the caller's responsibility (and
+    # only ``empty`` / ``from_bytes`` guarantee 4 KiB on this class).
+    # Build on host then push to device to avoid cupy JIT (CUDA 13 vs
+    # CuPy cu12 nvrtc mismatch on the cluster).
     src = cp.asarray(np.arange(1024, dtype=np.uint8))
-    # cupy's default allocator is not 4 KiB-aligned for sub-page slabs,
-    # but CzarrGpuBuffer must always be 4 KiB-aligned.
     buf = CzarrGpuBuffer.from_array_like(src)
     try:
-        assert buf.device_ptr % 4096 == 0
+        assert buf.device_ptr == int(src.data.ptr)
         assert len(buf) == 1024
         host = buf.as_numpy_array()
         np.testing.assert_array_equal(host, np.arange(1024, dtype=np.uint8))

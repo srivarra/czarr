@@ -34,6 +34,7 @@ from zarr.core.buffer import gpu as gpu_buffer
 from czarr._buffer import buffer_to_nvarray, nvarray_to_buffer
 from czarr._nvtx import nvtx_range
 from czarr.alloc import register_nvcomp_allocator
+from czarr.core.buffer import CzarrGpuBuffer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -108,8 +109,15 @@ _CHECKSUM_MAP: dict[Checksum, nvcomp.ChecksumPolicy] = {
 }
 
 
+_GPU_BUFFER_TYPES: tuple[type, ...] = (gpu_buffer.Buffer, CzarrGpuBuffer)
+
+
 def _is_gpu_prototype(prototype: BufferPrototype) -> bool:
-    return issubclass(prototype.buffer, gpu_buffer.Buffer)
+    return issubclass(prototype.buffer, _GPU_BUFFER_TYPES)
+
+
+def _is_gpu_buffer(chunk: object) -> bool:
+    return isinstance(chunk, _GPU_BUFFER_TYPES)
 
 
 @dataclass(frozen=True)
@@ -288,8 +296,8 @@ class CudaBytesBytesCodec(BytesBytesCodec):
                 #   simple until profiling shows it's the bottleneck.
                 nv_inputs: list[nvcomp.Array] = []
                 for chunk in originals:
-                    if isinstance(chunk, gpu_buffer.Buffer):
-                        cp_arr = chunk.as_array_like()
+                    if _is_gpu_buffer(chunk):
+                        cp_arr = cp.asarray(chunk.as_array_like()).view(cp.uint8)
                         if self._frame_strip_head or self._frame_strip_tail:
                             end = cp_arr.size - self._frame_strip_tail if self._frame_strip_tail else cp_arr.size
                             cp_arr = cp_arr[self._frame_strip_head : end]

@@ -9,13 +9,15 @@ import numpy as np
 from nvidia import nvcomp
 from zarr.core.buffer import gpu as gpu_buffer
 
+from czarr.core.buffer import CzarrGpuBuffer
+
 if TYPE_CHECKING:
     from zarr.core.buffer import Buffer, BufferPrototype
 
 
 def _is_gpu_prototype(prototype: BufferPrototype) -> bool:
-    """Return True when the prototype's Buffer class is the Zarr GPU Buffer."""
-    return issubclass(prototype.buffer, gpu_buffer.Buffer)
+    """Return True when the prototype's Buffer class is a GPU Buffer."""
+    return issubclass(prototype.buffer, (gpu_buffer.Buffer, CzarrGpuBuffer))
 
 
 # nvCOMP's batched encode/decode kernels read with vector loads that need

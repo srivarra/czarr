@@ -132,19 +132,15 @@ class CzarrGpuBuffer(core.Buffer):
 
     @classmethod
     def from_array_like(cls, array_like: ArrayLike) -> Self:
-        """Wrap a CAI- or DLPack-compatible array.
+        """Wrap a CAI- or DLPack-compatible array zero-copy.
 
-        If the source is already a cupy uint8 1-D view, we wrap it
-        zero-copy. Otherwise we copy into a fresh VMR-backed buffer so
-        the result has the alignment / RDMA guarantees CzarrGpuBuffer
-        promises for freshly-allocated buffers.
+        The 4 KiB-aligned + RDMA guarantee only holds for buffers
+        produced by :meth:`empty` / :meth:`from_bytes`. Callers that
+        need the alignment guarantee should allocate explicitly and
+        copy in; wrapping someone else's pointer keeps their alignment.
         """
         src = cp.asarray(array_like).view(cp.uint8).ravel()
-        if int(src.data.ptr) % 4096 == 0:
-            return cls(src)
-        out = cls.empty(int(src.size))
-        out._data[:] = src
-        return out
+        return cls(src)
 
     @classmethod
     def from_buffer(cls, buffer: core.Buffer) -> Self:
