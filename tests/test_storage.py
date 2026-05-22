@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
-from pathlib import Path
-
 import cupy as cp
 import numpy as np
 import pytest
@@ -14,27 +10,10 @@ import zarr
 from czarr import LZ4
 from czarr.storage import GPULocalStore, cufile_runtime
 
-# cuFile in compat mode rejects tmpfs/ramfs; force compat path on hosts without
-# nvidia_fs so the sync tests still run.  When nvidia_fs IS loaded we want real
-# GDS — the async path requires it and silently corrupts under forced compat.
-if not os.path.exists("/proc/driver/nvidia-fs"):
-    os.environ.setdefault("CUFILE_FORCE_COMPAT_MODE", "true")
-_LUSTRE_TMP_PARENT = "/hpc/mydata/sricharan.varra/Dev/czarr"
 
-
-@pytest.fixture
-def lustre_tmpdir():
-    # ignore_cleanup_errors: NFS metadata caching can leave stale .nfs* sentinel
-    # files briefly after handle close, making rmdir() race-fail.
-    with tempfile.TemporaryDirectory(
-        dir=_LUSTRE_TMP_PARENT, prefix=".gpustore_test_", ignore_cleanup_errors=True
-    ) as td:
-        yield Path(td)
-
-
-def test_gpu_local_store_roundtrip_via_zarr(lustre_tmpdir):
+def test_gpu_local_store_roundtrip_via_zarr(gpustore_tmpdir):
     """Write/read a Zarr array through GPULocalStore using GPU buffer prototype."""
-    store = GPULocalStore(lustre_tmpdir)
+    store = GPULocalStore(gpustore_tmpdir)
     if not store.gds_available:
         pytest.skip("cuFile not available on this host")
 
@@ -49,7 +28,7 @@ def test_gpu_local_store_roundtrip_via_zarr(lustre_tmpdir):
         )
         arr[:] = cp.asarray(data)
 
-        store_ro = GPULocalStore(lustre_tmpdir)
+        store_ro = GPULocalStore(gpustore_tmpdir)
         arr_ro = zarr.open_array(store=store_ro, mode="r")
         out = arr_ro[:]
 
@@ -57,9 +36,9 @@ def test_gpu_local_store_roundtrip_via_zarr(lustre_tmpdir):
     np.testing.assert_array_equal(cp.asnumpy(out), data)
 
 
-def test_gpu_local_store_falls_back_for_host_prototype(lustre_tmpdir):
+def test_gpu_local_store_falls_back_for_host_prototype(gpustore_tmpdir):
     """A host buffer prototype should bypass cuFile and use the LocalStore path."""
-    store = GPULocalStore(lustre_tmpdir)
+    store = GPULocalStore(gpustore_tmpdir)
     if not store.gds_available:
         pytest.skip("cuFile not available on this host")
 
@@ -76,11 +55,11 @@ def test_gpu_local_store_falls_back_for_host_prototype(lustre_tmpdir):
     np.testing.assert_array_equal(out, data)
 
 
-def test_arr_getitem_drives_cufile(lustre_tmpdir):
+def test_arr_getitem_drives_cufile(gpustore_tmpdir):
     """A full-array read through zarr's pipeline must actually exercise cuFile."""
     import czarr
 
-    store = GPULocalStore(lustre_tmpdir)
+    store = GPULocalStore(gpustore_tmpdir)
     if not store.gds_available:
         pytest.skip("cuFile not available on this host")
 
@@ -109,7 +88,7 @@ def test_arr_getitem_drives_cufile(lustre_tmpdir):
 
         cufile_runtime.read_into = _traced
         try:
-            store_r = GPULocalStore(lustre_tmpdir, read_only=True)
+            store_r = GPULocalStore(gpustore_tmpdir, read_only=True)
             arr_r = zarr.open_array(store=store_r, mode="r")
             out = arr_r[2:6]  # 4 chunks
         finally:
@@ -121,13 +100,13 @@ def test_arr_getitem_drives_cufile(lustre_tmpdir):
     np.testing.assert_array_equal(cp.asnumpy(out), src[2:6])
 
 
-def test_cufile_runtime_read_into_async_roundtrip(lustre_tmpdir):
+def test_cufile_runtime_read_into_async_roundtrip(gpustore_tmpdir):
     """Async cuFile read submits, completes on stream sync, returns correct bytes."""
     if not cufile_runtime.is_async_available():
         pytest.skip("cuFile async path requires nvidia_fs (real GDS)")
 
     payload = np.arange(4096, dtype=np.uint32)
-    path = lustre_tmpdir / "async_probe.bin"
+    path = gpustore_tmpdir / "async_probe.bin"
     path.write_bytes(payload.tobytes())
 
     dbuf = cp.empty(payload.nbytes, dtype=cp.uint8)

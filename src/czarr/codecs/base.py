@@ -275,10 +275,28 @@ class CudaBytesBytesCodec(BytesBytesCodec):
             if op == "decode":
                 # Apply frame strip per-chunk before nvCOMP.  For NVCOMP_NATIVE
                 # codecs both hooks are no-ops and this is just a view.
+                #
+                # Path A — GPU buffer (the GPULocalStore + configure_gpu case):
+                #   chunk.as_array_like() returns the underlying cupy.ndarray;
+                #   nvcomp.as_array accepts __cuda_array_interface__ directly so
+                #   we hand off without any host round-trip.  Frame strip is a
+                #   device-side slice.
+                #
+                # Path B — host buffer (regular LocalStore or remote stores):
+                #   materialise to bytes on the host, then nvcomp.as_array().cuda()
+                #   uploads.  Could be improved with async-pinned staging — kept
+                #   simple until profiling shows it's the bottleneck.
                 nv_inputs: list[nvcomp.Array] = []
                 for chunk in originals:
-                    stripped = self._unwrap_frame(memoryview(chunk.to_bytes()))
-                    nv_inputs.append(nvcomp.as_array(bytes(stripped)).cuda())
+                    if isinstance(chunk, gpu_buffer.Buffer):
+                        cp_arr = chunk.as_array_like()
+                        if self._frame_strip_head or self._frame_strip_tail:
+                            end = cp_arr.size - self._frame_strip_tail if self._frame_strip_tail else cp_arr.size
+                            cp_arr = cp_arr[self._frame_strip_head : end]
+                        nv_inputs.append(nvcomp.as_array(cp_arr))
+                    else:
+                        stripped = self._unwrap_frame(memoryview(chunk.to_bytes()))
+                        nv_inputs.append(nvcomp.as_array(bytes(stripped)).cuda())
 
                 with nvtx_range("czarr.codec.alloc_outs"):
                     decode_outs = [cp.empty(self._expected_decoded_bytes(spec), dtype=cp.uint8) for spec in specs]

@@ -72,6 +72,9 @@ urls.Source = "https://github.com/srivarra/czarr"
 "czarr.gdeflate" = "czarr.codecs.compressors.native:GDeflate"
 "czarr.snappy"   = "czarr.codecs.compressors.native:Snappy"
 
+[project.entry-points."zarr.codec_pipeline"]
+"czarr.pipeline" = "czarr.pipeline.pipeline:CzarrPipeline"
+
 
 [dependency-groups]
 dev = [

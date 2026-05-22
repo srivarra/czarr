@@ -1,11 +1,14 @@
-"""Phase 1 substrate tests: StreamPool, PinnedHostPool, DeviceBufferPool."""
+"""Pipeline tests: Phase 1 substrate + Phase 2 CzarrPipeline integration."""
 
 from __future__ import annotations
 
 import cupy as cp
+import numpy as np
 import pytest
+import zarr
 
-from czarr.pipeline import DeviceBufferPool, PinnedHostPool, StreamPool
+import czarr
+from czarr.pipeline import CzarrPipeline, DeviceBufferPool, PinnedHostPool, StreamPool
 
 
 class TestStreamPool:
@@ -102,6 +105,79 @@ class TestPinnedHostPool:
             assert pool.free_count(2048) == 1
         finally:
             pool.close()
+
+
+class TestCzarrPipeline:
+    def test_pipeline_registers_as_default(self):
+        """configure_gpu() should set codec_pipeline.path to CzarrPipeline."""
+        czarr.configure_gpu()
+        assert zarr.config.get("codec_pipeline.path") == f"{CzarrPipeline.__module__}.{CzarrPipeline.__qualname__}"
+
+    def test_pipeline_round_trip_with_compat_codec(self, gpustore_tmpdir):
+        """End-to-end round-trip via CzarrPipeline + GPULocalStore + Zstd.
+
+        Exercises the GPU-direct path: GPULocalStore returns gpu.Buffer
+        from cuFile reads, which CudaBytesBytesCodec passes to nvcomp
+        without any host round-trip.
+        """
+        czarr.configure_gpu()
+
+        store = czarr.GPULocalStore(gpustore_tmpdir / "rt_zstd.zarr")
+        if not store.gds_available:
+            pytest.skip("cuFile not available on this host")
+
+        src = np.arange(1024, dtype=np.float32).reshape(32, 32)
+        arr = zarr.create_array(
+            store=store,
+            shape=src.shape,
+            chunks=(16, 16),
+            dtype=src.dtype,
+            compressors=[czarr.Zstd()],
+            overwrite=True,
+        )
+        arr[:] = cp.asarray(src)
+        out = arr[:]
+
+        assert isinstance(out, cp.ndarray)
+        np.testing.assert_array_equal(cp.asnumpy(out), src)
+
+    def test_pipeline_round_trip_with_native_codec(self, gpustore_tmpdir):
+        """Round-trip via CzarrPipeline + GPULocalStore + nvCOMP-native ANS."""
+        czarr.configure_gpu()
+
+        store = czarr.GPULocalStore(gpustore_tmpdir / "rt_ans.zarr")
+        if not store.gds_available:
+            pytest.skip("cuFile not available on this host")
+
+        src = np.arange(2048, dtype=np.uint16).reshape(32, 64)
+        arr = zarr.create_array(
+            store=store,
+            shape=src.shape,
+            chunks=(8, 32),
+            dtype=src.dtype,
+            compressors=[czarr.ANS()],
+            overwrite=True,
+        )
+        arr[:] = cp.asarray(src)
+        out = arr[:]
+
+        assert isinstance(out, cp.ndarray)
+        np.testing.assert_array_equal(cp.asnumpy(out), src)
+
+    def test_stream_pool_shared_across_pipeline_instances(self):
+        """Each pipeline instance shares the class-level StreamPool."""
+        czarr.configure_gpu(stream_pool_size=4)
+        p1 = CzarrPipeline.get_stream_pool()
+        p2 = CzarrPipeline.get_stream_pool()
+        assert p1 is p2
+        assert p1.size == 4
+
+    def test_reconfigure_replaces_pools(self):
+        """CzarrPipeline.configure() can resize the substrate."""
+        CzarrPipeline.configure(stream_pool_size=2)
+        assert CzarrPipeline.get_stream_pool().size == 2
+        CzarrPipeline.configure(stream_pool_size=8)
+        assert CzarrPipeline.get_stream_pool().size == 8
 
 
 class TestDeviceBufferPool:

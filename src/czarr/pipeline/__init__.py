@@ -15,9 +15,11 @@ subclass) on top of these primitives.
 
 from czarr.pipeline.device import DeviceBufferPool
 from czarr.pipeline.pinned import PinnedHostPool
+from czarr.pipeline.pipeline import CzarrPipeline
 from czarr.pipeline.streams import StreamPool
 
 __all__ = [
+    "CzarrPipeline",
     "DeviceBufferPool",
     "PinnedHostPool",
     "StreamPool",

@@ -62,21 +62,27 @@ def configure_gpu(
     rmm_pool_gb: float | None = None,
     cufile_poll_mode: bool = False,
     cufile_poll_threshold_kb: int = 4,
+    stream_pool_size: int = 4,
+    pinned_prealloc: Any = None,
+    pipeline: bool = True,
 ) -> None:
     """One-call setup for GPU-codec workloads.
 
     Configures zarr's runtime so that:
 
+    * The :class:`czarr.pipeline.CzarrPipeline` becomes the global
+      ``codec_pipeline`` (unless ``pipeline=False``).  Codecs route through
+      it and the shared :class:`StreamPool` + :class:`PinnedHostPool`
+      substrate.
     * Every ``arr[:]`` (and any other selection) decodes the whole chunk
       batch in a single nvCOMP call — sets ``codec_pipeline.batch_size``
-      to ``sys.maxsize`` on zarr's default ``BatchedCodecPipeline`` so one
-      ``CudaBytesBytesCodec.decode([all])`` runs per read.
+      to ``sys.maxsize`` so one ``CudaBytesBytesCodec.decode([all])``
+      runs per read.
     * Buffers default to GPU prototypes — :class:`zarr.core.buffer.gpu.Buffer`
-      and ``gpu.NDBuffer``.  No more wrapping every call in
-      ``zarr.config.set({"buffer": ...})``.
+      and ``gpu.NDBuffer``.
     * Compat codecs (Zstd, LZ4, Gzip, Zlib) win the registry lookup over
-      their CPU equivalents — existing CPU-written zarr stores decode on
-      the GPU transparently.
+      their CPU equivalents — existing CPU-written zarr v3 stores decode
+      on the GPU transparently.
 
     Parameters
     ----------
@@ -98,12 +104,26 @@ def configure_gpu(
     cufile_poll_threshold_kb:
         Max I/O size (KiB) that uses polling when ``cufile_poll_mode=True``.
         Larger I/Os fall back to IRQ-driven completion regardless.
+    stream_pool_size:
+        Number of CUDA streams in the shared :class:`StreamPool`.
+        Default 4.
+    pinned_prealloc:
+        Optional iterable of ``(size, count)`` tuples for the shared
+        :class:`PinnedHostPool` pre-allocation hint.
+    pipeline:
+        If True (default), register :class:`CzarrPipeline` as zarr's
+        default ``codec_pipeline``.  Set False to opt into per-array
+        pipeline registration only.
     """
+    from czarr.pipeline import CzarrPipeline
+
     if rmm_pool_gb is not None:
         use_rmm_pool(initial_size=int(rmm_pool_gb * (1 << 30)))
     register_nvcomp_allocator()
     if cufile_poll_mode and cufile_runtime.is_available():
         cufile_runtime.set_poll_mode(True, cufile_poll_threshold_kb)
+
+    CzarrPipeline.configure(stream_pool_size=stream_pool_size, pinned_prealloc=pinned_prealloc)
 
     settings: dict[str, Any] = {
         "codec_pipeline.batch_size": batch_size if batch_size is not None else sys.maxsize,
@@ -111,6 +131,8 @@ def configure_gpu(
         "buffer": "zarr.core.buffer.gpu.Buffer",
         "ndbuffer": "zarr.core.buffer.gpu.NDBuffer",
     }
+    if pipeline:
+        settings["codec_pipeline.path"] = f"{CzarrPipeline.__module__}.{CzarrPipeline.__qualname__}"
     # Resolve registry conflicts where czarr and zarr both registered a
     # codec under the same id (zstd, gzip).  Without this zarr emits a
     # ZarrUserWarning on every read.
