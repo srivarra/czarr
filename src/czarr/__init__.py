@@ -135,8 +135,13 @@ def configure_gpu(
         "buffer": "zarr.core.buffer.gpu.Buffer",
         "ndbuffer": "zarr.core.buffer.gpu.NDBuffer",
     }
+    # Explicit set in both branches so toggling pipeline=False at runtime
+    # actually reverts to zarr's default BatchedCodecPipeline (otherwise the
+    # last codec_pipeline.path setting sticks across configure_gpu calls).
     if pipeline:
         settings["codec_pipeline.path"] = f"{CzarrPipeline.__module__}.{CzarrPipeline.__qualname__}"
+    else:
+        settings["codec_pipeline.path"] = "zarr.core.codec_pipeline.BatchedCodecPipeline"
     # Resolve registry conflicts where czarr and zarr both registered a
     # codec under the same id (zstd, gzip, shuffle, bitround, ...).
     # Without this zarr emits a ZarrUserWarning on every read.
