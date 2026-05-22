@@ -34,19 +34,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from zarr.core.codec_pipeline import BatchedCodecPipeline, fill_value_or_default
+from zarr.core.codec_pipeline import BatchedCodecPipeline
 
 from czarr.pipeline.pinned import PinnedHostPool
 from czarr.pipeline.streams import StreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-    from zarr.abc.codec import GetResult
-    from zarr.abc.store import ByteGetter
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import NDBuffer
-    from zarr.core.indexing import SelectorTuple
 
 
 class CzarrPipeline(BatchedCodecPipeline):
@@ -93,68 +87,18 @@ class CzarrPipeline(BatchedCodecPipeline):
         cls._stream_pool = StreamPool(size=stream_pool_size)
         cls._pinned_pool = PinnedHostPool(prealloc=list(pinned_prealloc) if pinned_prealloc else None)
 
-    async def read_batch(
-        self,
-        batch_info: Iterable[tuple[ByteGetter, ArraySpec, SelectorTuple, SelectorTuple, bool]],
-        out: NDBuffer,
-        drop_axes: tuple[int, ...] = (),
-    ) -> tuple[GetResult, ...]:
-        """Override of zarr's per-chunk fetch with a batched ``store.get_many`` path.
-
-        Whenever the entire batch's byte-getters resolve to the same
-        :class:`czarr.storage.GPULocalStore`, we call ``store.get_many``
-        once — cutting per-chunk Python + cuFile setup overhead that
-        Phase 0 measured at ~3 ms per chunk.  Otherwise the call falls
-        through to the parent's ``concurrent_map`` path.
-        """
-        from zarr.abc.codec import GetResult
-
-        from czarr.storage import GPULocalStore
-
-        batch_info_list = list(batch_info)
-        if self.supports_partial_decode or not batch_info_list:
-            return await super().read_batch(batch_info_list, out, drop_axes)
-
-        # All byte-getters in a single zarr selection always share the
-        # same store; check via the first one and assert downstream.  If
-        # the store doesn't expose get_many or isn't a GPULocalStore,
-        # punt back to zarr's default path.  Sharding wraps byte-getters
-        # in a `_ShardingByteGetter` that has no `.store` attribute —
-        # those go through the parent path too (the shard is read in one
-        # shot already; per-inner-chunk batching happens via the inner
-        # pipeline's own read_batch).
-        first_bg = batch_info_list[0][0]
-        first_store = getattr(first_bg, "store", None)
-        if not isinstance(first_store, GPULocalStore) or not hasattr(first_store, "get_many"):
-            return await super().read_batch(batch_info_list, out, drop_axes)
-
-        # Single batched fetch.  zarr's default uses concurrent_map; we
-        # use store.get_many which underneath pre-registers handles + does
-        # parallel cuFile reads.
-        prototype = batch_info_list[0][1].prototype
-        chunk_bytes_batch = await first_store.get_many(
-            [bg.path for bg, _, _, _, _ in batch_info_list],
-            prototype=prototype,
-        )
-
-        chunk_array_batch = await self.decode_batch(
-            [
-                (chunk_bytes, chunk_spec)
-                for chunk_bytes, (_, chunk_spec, *_) in zip(chunk_bytes_batch, batch_info_list, strict=False)
-            ],
-        )
-
-        results: list[GetResult] = []
-        for chunk_array, (_, chunk_spec, chunk_selection, out_selection, _) in zip(
-            chunk_array_batch, batch_info_list, strict=False
-        ):
-            if chunk_array is not None:
-                tmp = chunk_array[chunk_selection]
-                if drop_axes:
-                    tmp = tmp.squeeze(axis=drop_axes)
-                out[out_selection] = tmp
-                results.append(GetResult(status="present"))
-            else:
-                out[out_selection] = fill_value_or_default(chunk_spec)
-                results.append(GetResult(status="missing"))
-        return tuple(results)
+    # NOTE: a read_batch override that routes through GPULocalStore.get_many
+    # was tried (Phase 2 of epic z3hd9ph7) and benched on Bruno H100.
+    # Result: a 2-4x REGRESSION versus zarr's stock concurrent_map path.
+    # Root cause: on H100 with real GDS, per-cuFile-call overhead is ~1 ms,
+    # while the serial open + handle_register loop inside get_many costs
+    # ~1 ms per chunk too.  The default concurrent_map path runs the
+    # per-call overhead 32-way parallel and ends up faster.  On A40
+    # (compat mode, ~3 ms per call) the override won 1.34x — but the
+    # H100 regression made the override a net negative across the
+    # hardware we target.
+    #
+    # GPULocalStore.get_many stays in place as a building block; the real
+    # speedup will come from Phase 3 (cuFile batched I/O API:
+    # cuFileBatchIOSetUp/Submit/GetStatus) which collapses the open +
+    # register cycle into one driver call.  Until then, no override.
