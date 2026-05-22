@@ -28,23 +28,44 @@ from czarr.codecs.compressors import (
     Zlib,
     Zstd,
 )
+from czarr.codecs.filters import BitRound, Delta, FixedScaleOffset, Shuffle
 
 # Register all codec classes with zarr's codec registry.  Compat codecs
-# shadow stdlib codec_ids ("zstd", "lz4", "gzip", "zlib"); native codecs
-# use "czarr.*" so they never collide.
-for _cls in (ANS, Bitcomp, Cascaded, Deflate, GDeflate, Snappy, Zstd, LZ4, Gzip, Zlib):
+# and filters shadow stdlib codec_ids ("zstd", "lz4", "gzip", "zlib",
+# "shuffle", "delta", "fixedscaleoffset", "bitround"); native codecs use
+# "czarr.*" so they never collide.
+for _cls in (
+    ANS,
+    Bitcomp,
+    Cascaded,
+    Deflate,
+    GDeflate,
+    Snappy,
+    Zstd,
+    LZ4,
+    Gzip,
+    Zlib,
+    Shuffle,
+    Delta,
+    FixedScaleOffset,
+    BitRound,
+):
     register_codec(_cls.codec_name, _cls)
 
 __all__ = [
     "ANS",
     "Bitcomp",
+    "BitRound",
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
+    "Delta",
     "Deflate",
+    "FixedScaleOffset",
     "GDeflate",
     "Gzip",
     "LZ4",
+    "Shuffle",
     "Snappy",
     "Zlib",
     "Zstd",

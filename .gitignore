@@ -36,3 +36,7 @@ bench/logs/
 cufile.log
 .gpustore_test_*
 .gpustore_talon_slice*
+
+# One-off spike/experiment scripts under bench/.  Real benchmarks land
+# in bench/baseline.py and the upcoming Phase 6 suite.
+bench/spike_*.py

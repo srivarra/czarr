@@ -35,6 +35,27 @@ def _reset_zarr_config():
     zarr.config.reset()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _rmm_teardown():
+    """Reset RMM to a vanilla CUDA MR after the session.
+
+    Some tests reinitialise RMM to a pool MR (``use_rmm_pool``).  At
+    process exit, the pool's teardown can race with cuda.core +
+    nvCOMP's own teardown and segfault.  Switching back to the simple
+    CudaMemoryResource at session end gives a deterministic shutdown
+    path that matches the pristine pre-test state.
+    """
+    yield
+    try:
+        import rmm
+
+        rmm.mr.set_current_device_resource(rmm.mr.CudaMemoryResource())
+    except (ImportError, RuntimeError):
+        # Best-effort cleanup; RMM may be absent or already torn down,
+        # in which case let the interpreter handle the rest.
+        pass
+
+
 @pytest.fixture
 def gpustore_tmpdir() -> Path:
     """Real-disk tempdir suitable for ``GPULocalStore`` + cuFile reads/writes.

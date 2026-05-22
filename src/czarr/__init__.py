@@ -42,12 +42,16 @@ from czarr.codecs import (
     ANS,
     LZ4,
     Bitcomp,
+    BitRound,
     Cascaded,
     Checksum,
     CudaBytesBytesCodec,
     Deflate,
+    Delta,
+    FixedScaleOffset,
     GDeflate,
     Gzip,
+    Shuffle,
     Snappy,
     Zlib,
     Zstd,
@@ -134,9 +138,9 @@ def configure_gpu(
     if pipeline:
         settings["codec_pipeline.path"] = f"{CzarrPipeline.__module__}.{CzarrPipeline.__qualname__}"
     # Resolve registry conflicts where czarr and zarr both registered a
-    # codec under the same id (zstd, gzip).  Without this zarr emits a
-    # ZarrUserWarning on every read.
-    for cls in (Zstd, LZ4, Gzip, Zlib):
+    # codec under the same id (zstd, gzip, shuffle, bitround, ...).
+    # Without this zarr emits a ZarrUserWarning on every read.
+    for cls in (Zstd, LZ4, Gzip, Zlib, Shuffle, Delta, FixedScaleOffset, BitRound):
         settings[f"codecs.{cls.codec_name}"] = f"{cls.__module__}.{cls.__qualname__}"
 
     zarr.config.set(settings)
@@ -145,14 +149,18 @@ def configure_gpu(
 __all__ = [
     "ANS",
     "Bitcomp",
+    "BitRound",
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
+    "Delta",
     "Deflate",
+    "FixedScaleOffset",
     "GDeflate",
     "GPULocalStore",
     "Gzip",
     "LZ4",
+    "Shuffle",
     "Snappy",
     "Zlib",
     "Zstd",
