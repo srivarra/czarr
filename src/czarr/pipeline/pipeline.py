@@ -1,19 +1,16 @@
 """``CzarrPipeline`` — GPU-native subclass of zarr v3's BatchedCodecPipeline.
 
-Phase 2 of the refactor (epic ianyfe7m).
-
 In zarr-python 3.x, a :class:`zarr.abc.codec.CodecPipeline` is
-instantiated per array call and orchestrates the codec chain.  The
-stock :class:`zarr.core.codec_pipeline.BatchedCodecPipeline` already
-batches per-codec decode calls across all chunks of a selection, so the
-expensive cross-chunk fan-out is *not* the bottleneck.
+instantiated per array call and orchestrates the codec chain.
 
 What this subclass changes:
 
-* Owns a class-level :class:`StreamPool` and :class:`PinnedHostPool`
-  (from Phase 1) so individual codecs can reach across into shared
-  substrate without having to thread these instances through every
-  call site.
+* Owns a class-level :class:`StreamPool` and :class:`PinnedHostPool` so
+  individual codecs can reach across into shared substrate without
+  having to thread these instances through every call site.
+* Adds NVTX-instrumented ``read_batch`` / ``write_batch`` so the nsys
+  timeline shows the read + decode interleave that fires when
+  ``codec_pipeline.batch_size`` is set below ``len(chunks)``.
 * Provides :func:`configure` for tuning the substrate from
   :func:`czarr.configure_gpu`.
 
@@ -23,6 +20,17 @@ the input chunk is already a ``gpu.Buffer`` it bypasses
 ``to_bytes() → host → .cuda()`` entirely.  This is the largest
 per-chunk win and applies whether the user opts in via
 ``codec_pipeline.path`` or per-array.
+
+Read/decode overlap: zarr's :meth:`BatchedCodecPipeline.read` already
+splits ``batch_info`` into batches of ``self.batch_size`` and dispatches
+them via ``concurrent_map`` up to ``async.concurrency``.  Inside each
+batch, reads happen concurrently and decode runs after they all
+arrive.  Across batches, the decode of batch K runs concurrently with
+the reads of batch K+1.  So the lever for overlap is just ``batch_size``
+— ``configure_gpu(decode_batch_size=8)`` enables it by default.
+
+The NVTX wrappers below make the overlap visible in nsys; the actual
+concurrency comes from zarr's pipeline machinery.
 
 Register globally via :func:`czarr.configure_gpu` (sets
 ``codec_pipeline.path = "czarr.pipeline.CzarrPipeline"``).  Per-array
@@ -36,11 +44,19 @@ from typing import TYPE_CHECKING, ClassVar
 
 from zarr.core.codec_pipeline import BatchedCodecPipeline
 
+from czarr._nvtx import nvtx_range
 from czarr.pipeline.pinned import PinnedHostPool
 from czarr.pipeline.streams import StreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from zarr.abc.codec import CodecPipeline  # noqa: F401
+    from zarr.abc.store import ByteGetter, ByteSetter
+    from zarr.core.array_spec import ArraySpec
+    from zarr.core.buffer import NDBuffer
+    from zarr.core.codec_pipeline import GetResult
+    from zarr.core.indexing import SelectorTuple
 
 
 class CzarrPipeline(BatchedCodecPipeline):
@@ -99,6 +115,36 @@ class CzarrPipeline(BatchedCodecPipeline):
     # hardware we target.
     #
     # GPULocalStore.get_many stays in place as a building block; the real
-    # speedup will come from Phase 3 (cuFile batched I/O API:
+    # speedup will come from a future phase (cuFile batched I/O API:
     # cuFileBatchIOSetUp/Submit/GetStatus) which collapses the open +
     # register cycle into one driver call.  Until then, no override.
+
+    # ------------------------------------------------------------------
+    # NVTX-instrumented read/write — same logic as the parent, but each
+    # micro-batch gets a clearly-bounded range on the nsys timeline so the
+    # read↔decode interleave is visible.  Without this every batch shows
+    # up as an interleaved blur of unrelated chunks.
+    # ------------------------------------------------------------------
+
+    async def read_batch(
+        self,
+        batch_info: Iterable[tuple[ByteGetter, ArraySpec, SelectorTuple, SelectorTuple, bool]],
+        out: NDBuffer,
+        drop_axes: tuple[int, ...] = (),
+    ) -> tuple[GetResult, ...]:
+        """Run zarr's batched read with a per-microbatch NVTX range."""
+        # Materialise so we can count without consuming the iterator twice.
+        items = list(batch_info)
+        with nvtx_range("czarr.pipeline.read_batch", n=len(items)):
+            return await super().read_batch(items, out, drop_axes)
+
+    async def write_batch(
+        self,
+        batch_info: Iterable[tuple[ByteSetter, ArraySpec, SelectorTuple, SelectorTuple, bool]],
+        value: NDBuffer,
+        drop_axes: tuple[int, ...] = (),
+    ) -> None:
+        """Run zarr's batched write with a per-microbatch NVTX range."""
+        items = list(batch_info)
+        with nvtx_range("czarr.pipeline.write_batch", n=len(items)):
+            await super().write_batch(items, value, drop_axes)
