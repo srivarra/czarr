@@ -184,3 +184,50 @@ class TestFactories:
         opened = czarr.open_cuda_array(store=store, path=small_array.path)
         assert isinstance(opened, czarr.CudaZarrArray)
         assert opened.shape == small_array.shape
+
+    def test_string_path_auto_wraps_to_gpu_local_store(self, tmp_path) -> None:
+        """A string ``store`` argument should default to GPULocalStore (cuFile)."""
+        # Create + read back via path strings.  The factories should
+        # autowrap the path in czarr.GPULocalStore.
+        arr_path = str(tmp_path / "data.zarr")
+        arr = czarr.create_cuda_array(
+            store=arr_path,
+            shape=(4, 4),
+            chunks=(2, 2),
+            dtype="int16",
+            compressors=None,
+            filters=None,
+        )
+        assert isinstance(arr.store_path.store, czarr.GPULocalStore)
+        arr[:] = np.arange(16, dtype="int16").reshape(4, 4)
+
+        opened = czarr.open_cuda_array(store=arr_path)
+        assert isinstance(opened, czarr.CudaZarrArray)
+        assert isinstance(opened.store_path.store, czarr.GPULocalStore)
+
+    def test_pathlib_path_auto_wraps_to_gpu_local_store(self, tmp_path) -> None:
+        """A ``pathlib.Path`` should be treated like a string."""
+        arr = czarr.create_cuda_array(
+            store=tmp_path / "data.zarr",
+            shape=(4,),
+            chunks=(2,),
+            dtype="int16",
+            compressors=None,
+            filters=None,
+        )
+        assert isinstance(arr.store_path.store, czarr.GPULocalStore)
+
+    def test_explicit_store_passes_through(self, tmp_path) -> None:
+        """An explicit Store instance should NOT be autowrapped."""
+        store = MemoryStore()
+        arr = czarr.create_cuda_array(
+            store=store,
+            shape=(4,),
+            chunks=(2,),
+            dtype="int16",
+            compressors=None,
+            filters=None,
+        )
+        # MemoryStore stays as MemoryStore; not autowrapped.
+        assert arr.store_path.store is store
+        assert isinstance(arr.store_path.store, MemoryStore)
