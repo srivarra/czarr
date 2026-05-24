@@ -38,6 +38,7 @@ if platform.system() != "Linux":
 import zarr
 
 from czarr.alloc import register_nvcomp_allocator, use_rmm_pool
+from czarr.array import CudaZarrArray, create_cuda_array, open_cuda_array
 from czarr.codecs import (
     ANS,
     LZ4,
@@ -158,6 +159,7 @@ __all__ = [
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
+    "CudaZarrArray",
     "Delta",
     "Deflate",
     "FixedScaleOffset",
@@ -170,6 +172,8 @@ __all__ = [
     "Zlib",
     "Zstd",
     "configure_gpu",
+    "create_cuda_array",
+    "open_cuda_array",
     "register_nvcomp_allocator",
     "use_rmm_pool",
 ]
