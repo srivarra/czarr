@@ -42,7 +42,7 @@ class LZ4(_BackendAware):
     _algorithm: ClassVar[_Algorithm] = _Algorithm.LZ4
     _bitstream_kind: ClassVar[_BitstreamKind] = _BitstreamKind.WITH_UNCOMPRESSED_SIZE
     _supported_backends: ClassVar[tuple[CodecBackend, ...]] = ("native", "nvcomp")
-    _native_default: ClassVar[bool] = True
+    _default_backend: ClassVar[CodecBackend] = "native"
 
     acceleration: int = 1  # numcodecs metadata field; ignored by both backends
 

@@ -1,14 +1,11 @@
 """Codec backend dispatch and process-global override registry.
 
-The ``_BackendAware`` mixin lets one codec class dispatch to either
-nvCOMP or a native cuda-python kernel.
-
-A codec may be backed by NVIDIA's nvCOMP (closed-source, broad coverage)
-or by a native cuda-python kernel that czarr owns.  The choice is a
-runtime knob — both backends produce the same on-disk bitstream — so
-metadata never carries the backend choice (see
-:meth:`czarr.codecs.compressors.lz4.LZ4.to_dict` for the round-trip
-rules).
+A codec can route its encode/decode through one of several
+implementations — for compressors that's nvCOMP vs a native
+cuda-python kernel; for filters that's a cupy-primitive impl vs a
+cuda.compute (CCCL) impl.  The choice is a runtime knob — both
+backends produce the same on-disk bitstream — so metadata never
+carries the backend choice.
 
 The design is in ``docs/planning/research/cuda-array/08-two-tier-codecs.md``.
 This module is the runtime substrate.
@@ -17,14 +14,17 @@ This module is the runtime substrate.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, ClassVar
 
 from czarr.codecs.base import CudaBytesBytesCodec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-type CodecBackend = Literal["native", "nvcomp"]
+# CodecBackend is intentionally widened to ``str`` — each codec class
+# pins the valid set via its ``_supported_backends`` tuple.  Compressors
+# use ``"native"`` / ``"nvcomp"``; filters use ``"cupy"`` / ``"cccl"``.
+type CodecBackend = str
 
 
 # Process-global override map.  ``configure_gpu(codec_backend_overrides=...)``
@@ -51,16 +51,14 @@ def resolve_default_backend(
     codec_name: str,
     *,
     supported: tuple[CodecBackend, ...],
-    native_preferred: bool,
+    default: CodecBackend,
 ) -> CodecBackend:
     """Resolve the default backend for a codec at construction time.
 
     Precedence:
 
     1. Process-global override (set via :func:`czarr.configure_gpu`)
-    2. Class default — ``"native"`` when the codec opted in via
-       ``_native_default = True`` and ``"native"`` is in its supported set
-    3. ``"nvcomp"`` fallback
+    2. Class default supplied as ``default``
 
     Raises :class:`ValueError` when the override picks a backend the
     codec does not support — silent fallback hides user mistakes.
@@ -71,9 +69,9 @@ def resolve_default_backend(
             allowed = ", ".join(supported)
             raise ValueError(f"codec_backend_overrides[{codec_name!r}]={override!r}; codec only supports ({allowed!r})")
         return override
-    if native_preferred and "native" in supported:
-        return "native"
-    return "nvcomp"
+    if default not in supported:
+        raise ValueError(f"codec={codec_name!r} class default {default!r} not in supported ({', '.join(supported)!r})")
+    return default
 
 
 @dataclass(frozen=True)
@@ -81,11 +79,10 @@ class _BackendAware(CudaBytesBytesCodec):
     """``BytesBytesCodec`` that may route through nvCOMP or a native kernel.
 
     Subclasses declare ``_supported_backends`` (a tuple of allowed
-    backends; default is nvCOMP-only) and ``_native_default`` (whether
-    to pick ``"native"`` when the user has not explicitly chosen).  They
-    override ``_decode_native`` / ``_encode_native`` to provide the
-    native body; the nvCOMP body inherits from :class:`CudaBytesBytesCodec`
-    and runs through :meth:`_batch_sync`.
+    backends; default is nvCOMP-only) and ``_default_backend`` (the
+    class default when no per-instance kwarg / override is present).
+    They override ``_decode_native`` to provide the native body; the
+    nvCOMP body inherits from :class:`CudaBytesBytesCodec`.
 
     The ``backend`` field is the runtime choice — never persisted, never
     contributes to equality.  Per-instance ``backend=`` wins over the
@@ -93,7 +90,7 @@ class _BackendAware(CudaBytesBytesCodec):
     """
 
     _supported_backends: ClassVar[tuple[CodecBackend, ...]] = ("nvcomp",)
-    _native_default: ClassVar[bool] = False
+    _default_backend: ClassVar[CodecBackend] = "nvcomp"
 
     backend: CodecBackend | None = field(default=None, compare=False, repr=True)
 
@@ -102,7 +99,7 @@ class _BackendAware(CudaBytesBytesCodec):
         chosen = self.backend or resolve_default_backend(
             self.codec_name,
             supported=self._supported_backends,
-            native_preferred=self._native_default,
+            default=self._default_backend,
         )
         if chosen not in self._supported_backends:
             allowed = ", ".join(self._supported_backends)
@@ -124,3 +121,27 @@ class _BackendAware(CudaBytesBytesCodec):
         if op == "decode" and self.backend == "native":
             return self._decode_native(items, op)
         return super()._batch_sync(items, op)
+
+
+def resolve_backend_for_filter(
+    codec_name: str,
+    *,
+    instance_backend: CodecBackend | None,
+    supported: tuple[CodecBackend, ...],
+    default: CodecBackend,
+) -> CodecBackend:
+    """Convenience for filter codecs that aren't ``_BackendAware`` subclasses.
+
+    Same precedence stack as :func:`resolve_default_backend` but built
+    around per-instance ``backend=`` kwarg semantics.  Filter codecs
+    (Shuffle / Delta / FixedScaleOffset / BitRound) inherit
+    :class:`zarr.abc.codec.ArrayArrayCodec` directly and can't use the
+    ``_BackendAware`` mixin — call this from their ``__post_init__``
+    instead.
+    """
+    if instance_backend is not None:
+        if instance_backend not in supported:
+            allowed = ", ".join(supported)
+            raise ValueError(f"codec={codec_name!r} backend={instance_backend!r} unsupported; allowed: ({allowed!r})")
+        return instance_backend
+    return resolve_default_backend(codec_name, supported=supported, default=default)

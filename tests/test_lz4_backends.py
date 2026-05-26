@@ -34,57 +34,26 @@ def _reset_overrides() -> None:
 
 
 class TestResolveDefaultBackend:
-    """The precedence stack: override > native_default > nvcomp fallback."""
+    """The precedence stack: override > class default."""
 
-    def test_native_preferred_returns_native(self) -> None:
-        assert (
-            resolve_default_backend(
-                "lz4",
-                supported=("native", "nvcomp"),
-                native_preferred=True,
-            )
-            == "native"
-        )
+    def test_class_default_returned(self) -> None:
+        assert resolve_default_backend("lz4", supported=("native", "nvcomp"), default="native") == "native"
 
-    def test_native_not_preferred_returns_nvcomp(self) -> None:
-        assert (
-            resolve_default_backend(
-                "zstd",
-                supported=("nvcomp",),
-                native_preferred=False,
-            )
-            == "nvcomp"
-        )
+    def test_nvcomp_default(self) -> None:
+        assert resolve_default_backend("zstd", supported=("nvcomp",), default="nvcomp") == "nvcomp"
 
-    def test_native_preferred_but_unsupported_returns_nvcomp(self) -> None:
-        assert (
-            resolve_default_backend(
-                "zstd",
-                supported=("nvcomp",),
-                native_preferred=True,
-            )
-            == "nvcomp"
-        )
+    def test_default_not_supported_raises(self) -> None:
+        with pytest.raises(ValueError, match="class default"):
+            resolve_default_backend("zstd", supported=("nvcomp",), default="native")
 
     def test_override_wins(self) -> None:
         set_backend_overrides({"lz4": "nvcomp"})
-        assert (
-            resolve_default_backend(
-                "lz4",
-                supported=("native", "nvcomp"),
-                native_preferred=True,
-            )
-            == "nvcomp"
-        )
+        assert resolve_default_backend("lz4", supported=("native", "nvcomp"), default="native") == "nvcomp"
 
     def test_override_unsupported_raises(self) -> None:
         set_backend_overrides({"zstd": "native"})
         with pytest.raises(ValueError, match="codec_backend_overrides.*zstd.*native"):
-            resolve_default_backend(
-                "zstd",
-                supported=("nvcomp",),
-                native_preferred=False,
-            )
+            resolve_default_backend("zstd", supported=("nvcomp",), default="nvcomp")
 
 
 # ---------------------------------------------------------------------------
