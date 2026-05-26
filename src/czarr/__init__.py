@@ -63,6 +63,7 @@ from czarr.storage import GPULocalStore, cufile_runtime
 def configure_gpu(
     *,
     batch_size: int | None = None,
+    decode_batch_size: int = 8,
     async_concurrency: int = 32,
     rmm_pool_gb: float | None = None,
     cufile_poll_mode: bool = False,
@@ -93,9 +94,19 @@ def configure_gpu(
     Parameters
     ----------
     batch_size:
-        Pipeline batch size.  ``None`` (default) means "all chunks in one
-        decode call" — best perf for most cases.  Lower it (e.g. ``8``) only
-        when nvCOMP scratch memory matters (e.g. very large Zstd batches).
+        Explicit override for ``codec_pipeline.batch_size``.  When set,
+        wins over ``decode_batch_size``.  Use ``sys.maxsize`` to force
+        "all chunks in one decode call" (max nvCOMP batching, no
+        read/decode overlap).
+    decode_batch_size:
+        Micro-batch size for the read/decode pipeline.  Each micro-batch
+        runs ``store.get`` for its chunks and then nvCOMP decode on the
+        whole micro-batch; multiple micro-batches run concurrently so
+        decode of batch K overlaps the reads of batches K+1..K+N.  Default
+        8 — small enough to keep reads + decode interleaved on the
+        timeline, large enough that each nvCOMP call still amortises its
+        per-call overhead.  Set to ``sys.maxsize`` to disable the
+        overlap pipeline and decode everything in one call.
     async_concurrency:
         Parallel ``store.get`` calls inside a batch.  Default 32.
     rmm_pool_gb:
@@ -139,8 +150,9 @@ def configure_gpu(
 
     CzarrPipeline.configure(stream_pool_size=stream_pool_size, pinned_prealloc=pinned_prealloc)
 
+    effective_batch_size = batch_size if batch_size is not None else decode_batch_size
     settings: dict[str, Any] = {
-        "codec_pipeline.batch_size": batch_size if batch_size is not None else sys.maxsize,
+        "codec_pipeline.batch_size": effective_batch_size,
         "async.concurrency": async_concurrency,
         "buffer": "zarr.core.buffer.gpu.Buffer",
         "ndbuffer": "zarr.core.buffer.gpu.NDBuffer",
