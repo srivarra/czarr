@@ -1,4 +1,4 @@
-"""Three-way bench: pure zarr vs zarr+torch vs czarr.
+"""Multi-way bench: pure zarr vs zarr+torch vs kvikio.zarr vs czarr.
 
 Compares the most common read paths a scientific user takes when getting
 zarr data onto a GPU:
@@ -7,11 +7,15 @@ zarr data onto a GPU:
    not a GPU read.
 2. ``torch.from_numpy(zarr_arr[:]).cuda()`` — the naive PyTorch user
    path.  CPU read + explicit H2D copy + numpy→torch wrap.
-3. ``czarr.open_cuda_array(path)[:]`` — cupy on device.  cuFile read
+3. ``zarr.open_array(kvikio.zarr.GDSStore(path))[:]`` — RAPIDS' kvikio
+   GDS-backed zarr store.  cuFile reads into device via the same
+   primitive czarr's GPULocalStore uses; decode runs through whatever
+   codec pipeline zarr picks (CPU decoders by default, GPU if the user
+   has configured them).
+4. ``czarr.open_cuda_array(path)[:]`` — cupy on device.  cuFile read
    into GPU memory, nvCOMP/native decode on GPU, no host roundtrip.
-4. ``torch.from_dlpack(czarr_arr[:])`` — czarr read + zero-copy DLPack
-   handoff to torch.  The GPU-resident result of (3) reinterpreted as
-   a torch tensor without a copy.
+5. ``torch.from_dlpack(czarr_arr[:])`` — czarr read + zero-copy DLPack
+   handoff to torch.
 
 Workload: 1 GiB Z-slab of float32, (16, 4096, 4096) shape, 16x512x512
 chunks, zstd compression.  Matches the slice_compare canonical bench.
@@ -95,6 +99,74 @@ def bench_zarr_to_torch(path: Path, *, reps: int, warmup: int, device: torch.dev
     return samples
 
 
+def bench_kvikio_gds(path: Path, *, reps: int, warmup: int) -> list[float] | None:
+    """kvikio.zarr.GDSStore with zarr's default codec pipeline.
+
+    GDS reads but CPU-side Zstd decode (the registered numcodecs Zstd).
+    Forces D2H to host, decode, H2D back to device — strictly inferior
+    on a compressed workload.  Included as the apples-to-apples
+    "kvikio alone" baseline.
+    """
+    try:
+        import kvikio.zarr
+    except ImportError:
+        return None
+
+    zarr.config.set({"buffer": "zarr.core.buffer.gpu.Buffer", "ndbuffer": "zarr.core.buffer.gpu.NDBuffer"})
+    try:
+        store = kvikio.zarr.GDSStore(str(path))
+        arr = zarr.open_array(store, mode="r")
+        for _ in range(warmup):
+            _ = arr[:]
+            cp.cuda.Stream.null.synchronize()
+        samples: list[float] = []
+        for _ in range(reps):
+            t0 = time.perf_counter()
+            out = arr[:]
+            cp.cuda.Stream.null.synchronize()
+            samples.append(time.perf_counter() - t0)
+        assert isinstance(out, cp.ndarray), f"expected cupy.ndarray, got {type(out).__name__}"
+        return samples
+    finally:
+        zarr.config.reset()
+
+
+def bench_kvikio_gds_with_czarr_codecs(path: Path, *, reps: int, warmup: int) -> list[float] | None:
+    """kvikio.zarr.GDSStore + czarr's GPU codec registrations.
+
+    The fair-comparison path: kvikio handles the cuFile-direct read,
+    czarr's Zstd (nvCOMP-backed) handles decode on device.  Compared
+    against ``czarr.open_cuda_array`` this isolates the value of
+    czarr's ``GPULocalStore`` (anything left beyond kvikio's GDS
+    primitive) from the value of czarr's codec stack.
+    """
+    try:
+        import kvikio.zarr
+    except ImportError:
+        return None
+
+    # configure_gpu registers czarr's GPU Zstd / LZ4 / etc. in zarr's
+    # codec registry AND sets the GPU buffer prototype.  Result: kvikio
+    # does the GDS read, czarr's codecs run on the device-resident bytes.
+    czarr.configure_gpu()
+    try:
+        store = kvikio.zarr.GDSStore(str(path))
+        arr = zarr.open_array(store, mode="r")
+        for _ in range(warmup):
+            _ = arr[:]
+            cp.cuda.Stream.null.synchronize()
+        samples: list[float] = []
+        for _ in range(reps):
+            t0 = time.perf_counter()
+            out = arr[:]
+            cp.cuda.Stream.null.synchronize()
+            samples.append(time.perf_counter() - t0)
+        assert isinstance(out, cp.ndarray), f"expected cupy.ndarray, got {type(out).__name__}"
+        return samples
+    finally:
+        zarr.config.reset()
+
+
 def bench_czarr_direct(path: Path, *, reps: int, warmup: int) -> list[float]:
     """czarr.open_cuda_array — cupy on device via cuFile + nvCOMP/native."""
     czarr.configure_gpu()
@@ -172,15 +244,27 @@ def main() -> int:
 
     pure = bench_pure_zarr(args.path, reps=args.reps, warmup=args.warmup)
     zarr_torch = bench_zarr_to_torch(args.path, reps=args.reps, warmup=args.warmup, device=device)
+    kvikio_alone = bench_kvikio_gds(args.path, reps=args.reps, warmup=args.warmup)
+    kvikio_czarr_codecs = bench_kvikio_gds_with_czarr_codecs(args.path, reps=args.reps, warmup=args.warmup)
     czarr_direct = bench_czarr_direct(args.path, reps=args.reps, warmup=args.warmup)
     czarr_torch = bench_czarr_to_torch(args.path, reps=args.reps, warmup=args.warmup, device=device)
 
     rows = [
         ("zarr (numpy, host)", pure),
         ("zarr → torch.cuda", zarr_torch),
-        ("czarr (cupy, device)", czarr_direct),
-        ("czarr → torch (DLPack)", czarr_torch),
     ]
+    if kvikio_alone is not None:
+        rows.append(("kvikio.zarr (CPU decode)", kvikio_alone))
+    else:
+        print("(kvikio not installed — rows skipped)")
+    if kvikio_czarr_codecs is not None:
+        rows.append(("kvikio + czarr codecs", kvikio_czarr_codecs))
+    rows.extend(
+        [
+            ("czarr (cupy, device)", czarr_direct),
+            ("czarr → torch (DLPack)", czarr_torch),
+        ]
+    )
     print(f"{'path':<28}{'median':>12}{'min':>10}{'GiB/s':>10}")
     print("-" * 60)
     for label, samples in rows:
@@ -197,6 +281,14 @@ def main() -> int:
     print(f"czarr direct vs zarr→torch:      {zt_med / cd_med:>5.2f}× faster")
     print(f"czarr→torch vs zarr→torch:       {zt_med / ct_med:>5.2f}× faster")
     print(f"czarr direct vs czarr→torch:     {ct_med / cd_med:>5.2f}× ratio (DLPack overhead)")
+    if kvikio_alone is not None:
+        kv_med = statistics.median(kvikio_alone)
+        print(f"czarr direct vs kvikio.zarr alone:        {kv_med / cd_med:>5.2f}× faster")
+    if kvikio_czarr_codecs is not None:
+        kvc_med = statistics.median(kvikio_czarr_codecs)
+        print(
+            f"czarr direct vs kvikio + czarr codecs:    {kvc_med / cd_med:>5.2f}× ratio (GPULocalStore vs kvikio.zarr.GDSStore)"
+        )
     return 0
 
 

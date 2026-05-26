@@ -22,6 +22,6 @@ nvidia-smi --query-gpu=name --format=csv,noheader
 echo
 
 # `--with torch` brings the cu12 wheel (compatible with our cu12 install).
-uv run --with torch --with numcodecs --with lz4 --extra cu12 \
+uv run --with torch --with numcodecs --with lz4 --with kvikio-cu12 --extra cu12 \
     python -u -X faulthandler -m bench.cuda_array.three_way --rewrite 2>&1
 echo "=== exit: $? ==="
