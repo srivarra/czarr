@@ -102,17 +102,20 @@ class LZ4(_BackendAware):
         if not valid_items:
             return out
 
+        # Strip the 4-byte LE uncompressed-size prefix from each chunk
+        # *without* reading it back to host: the spec already carries the
+        # uncompressed size (spec.shape[0] bytes for our flat-bytes spec).
+        # Pass views into ``decode_lz4_native``; its one-shot concatenate
+        # handles the device-side gather in a single launch instead of
+        # 1024 per-chunk .copy() launches.
         cp_inputs: list[cp.ndarray] = []
         sizes: list[int] = []
-        for chunk, _spec in valid_items:
+        for chunk, spec in valid_items:
             cp_arr = _buffer_to_uint8_view(chunk)
             if cp_arr.size < 4:
                 raise ValueError(f"LZ4 native decode: chunk too small for size prefix ({cp_arr.size} bytes)")
-            # First 4 bytes are little-endian uncompressed size.
-            size_prefix = cp.asnumpy(cp_arr[:4]).view(np.uint32)[0]
-            uncompressed = int(size_prefix)
-            cp_inputs.append(cp_arr[4:].copy())  # explicit copy → contiguous device view
-            sizes.append(uncompressed)
+            cp_inputs.append(cp_arr[4:])  # view, not copy
+            sizes.append(int(spec.shape[0]))
 
         decoded = decode_lz4_native(cp_inputs, sizes)
         for idx, dec, (_chunk, spec) in zip(non_null_indices, decoded, valid_items, strict=True):
