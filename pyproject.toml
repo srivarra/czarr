@@ -162,6 +162,9 @@ librmm-cu13 = { index = "nvidia" }
 line-length = 120
 src = [ "src" ]
 extend-include = [ "*.ipynb" ]
+# Research spikes and bench scratchpads live under .planning/ — held
+# to a lighter lint standard than production code under src/.
+extend-exclude = [ ".planning" ]
 
 format.docstring-code-format = true
 
