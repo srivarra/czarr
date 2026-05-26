@@ -105,6 +105,12 @@ class CzarrGpuBuffer(core.Buffer):
             raise ValueError(f"CzarrGpuBuffer: only byte dtype allowed, got {arr.dtype}")
         # Always present as uint8 so downstream code sees one dtype.
         self._data: cp.ndarray = arr.view(cp.uint8)
+        # Set by :meth:`empty` when it registers the buffer with cuFile;
+        # :meth:`__del__` checks this flag to know it owns the deregistration.
+        # Slice-views constructed via :meth:`__getitem__` do NOT inherit
+        # registration ownership — they share the underlying allocation but
+        # only the original buffer is responsible for cleanup.
+        self._owns_cufile_registration: bool = False
 
     # ------------------------------------------------------------------
     # construction
@@ -112,7 +118,19 @@ class CzarrGpuBuffer(core.Buffer):
 
     @classmethod
     def empty(cls, size: int, *, stream: Stream | None = None) -> Self:
-        """Allocate a fresh ``size``-byte buffer from the VMR device pool."""
+        """Allocate a fresh ``size``-byte buffer from the VMR device pool.
+
+        The returned buffer is 4 KiB-aligned (VMR with ``addr_align=4096``)
+        and pre-registered with cuFile via
+        :func:`czarr.storage.cufile_runtime.ensure_buf_registered` so that
+        subsequent ``cuFileRead`` calls on this pointer avoid the per-call
+        register/deregister cycle (Phase 3 — register-once cuFile).
+
+        cuFile registration is best-effort: if cuFile is not available
+        (no GDS driver, library missing, etc.) the buffer still works for
+        regular cupy operations.  Slice views created via
+        :meth:`__getitem__` do NOT inherit registration ownership.
+        """
         if size < 0:
             raise ValueError(f"size must be non-negative, got {size}")
         if size == 0:
@@ -123,7 +141,21 @@ class CzarrGpuBuffer(core.Buffer):
         # DLPack; the view stays valid for our wrapper's lifetime and
         # the deleter runs when the cupy view is GC'd.
         full = cp.from_dlpack(cuda_buf).view(cp.uint8)
-        return cls(full[:size])
+        instance = cls(full[:size])
+        # Register with cuFile so cuFileRead on this pointer takes the
+        # already-registered fast path.  Best-effort — keep the buffer
+        # working even if cuFile isn't available on this system.
+        try:
+            from czarr.storage import cufile_runtime
+
+            if cufile_runtime.is_available():
+                cufile_runtime.ensure_buf_registered(instance.device_ptr, size)
+                instance._owns_cufile_registration = True
+        except Exception:  # noqa: BLE001
+            # cuFile init can fail in environments without nvidia-fs;
+            # the buffer remains usable for non-cuFile workloads.
+            pass
+        return instance
 
     @classmethod
     def create_zero_length(cls) -> Self:
@@ -223,6 +255,24 @@ class CzarrGpuBuffer(core.Buffer):
             "strides": None,
             "stream": None,
         }
+
+    def __del__(self) -> None:
+        """Deregister this buffer from cuFile if it was registered.
+
+        Only ``empty()``-produced buffers own a cuFile registration;
+        slice views and ``from_array_like`` wrappers leave the flag
+        ``False`` and skip deregistration.  Best-effort — if cuFile
+        teardown failed (rare; happens during interpreter shutdown) we
+        swallow the error rather than emit a noisy traceback.
+        """
+        if not getattr(self, "_owns_cufile_registration", False):
+            return
+        try:
+            from czarr.storage import cufile_runtime
+
+            cufile_runtime.deregister_buf(self.device_ptr)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class CzarrGpuNDBuffer(core.NDBuffer):

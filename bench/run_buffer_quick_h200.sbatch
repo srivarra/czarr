@@ -5,12 +5,12 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=128G
 #SBATCH --time=00:10:00
-#SBATCH --output=/hpc/mydata/sricharan.varra/Dev/czarr.czarr-gpu-buffer/bench/logs/buffer_h200_%j.log
-#SBATCH --error=/hpc/mydata/sricharan.varra/Dev/czarr.czarr-gpu-buffer/bench/logs/buffer_h200_%j.err
+#SBATCH --output=/hpc/mydata/sricharan.varra/Dev/czarr.czarr-v0.1/bench/logs/buffer_h200_%j.log
+#SBATCH --error=/hpc/mydata/sricharan.varra/Dev/czarr.czarr-v0.1/bench/logs/buffer_h200_%j.err
 
 set -uo pipefail
 
-REPO=/hpc/mydata/sricharan.varra/Dev/czarr.czarr-gpu-buffer
+REPO=/hpc/mydata/sricharan.varra/Dev/czarr.czarr-v0.1
 mkdir -p "$REPO/bench/logs"
 cd "$REPO"
 
