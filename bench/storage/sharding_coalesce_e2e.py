@@ -44,8 +44,20 @@ def _build_sharded_array(
     if root.exists():
         shutil.rmtree(root)
     rng = np.random.default_rng(0)
-    data = rng.integers(0, 10_000, size=shape, dtype=dtype)
+    # ``rng.integers`` only supports integer dtypes; cast through that
+    # so the random fill is fast (raw bytes) while the on-disk dtype is
+    # whatever the caller asked for.
+    if np.issubdtype(dtype, np.integer):
+        data = rng.integers(0, 10_000, size=shape, dtype=dtype)
+    else:
+        data = rng.standard_normal(size=shape).astype(dtype)
     store = LocalStore(str(root))
+    # No compressors / filters — uncompressed inner chunks isolate the
+    # I/O coalesce signal from the GPU decode path.  zarr's default is
+    # zstd at level 3; we explicitly pass () to opt out.  An orthogonal
+    # czarr decode bug on GPU partial-shard reads (Buffer.resize on
+    # an external buffer) blocks the compressed measurement; track in
+    # a follow-up after the coalesce signal is locked.
     arr = zarr.create_array(
         store=store,
         shape=shape,
@@ -53,6 +65,8 @@ def _build_sharded_array(
         shards=shard,
         dtype=dtype,
         serializer=ShardingCodec(chunk_shape=inner_chunk),
+        compressors=(),
+        filters=(),
     )
     arr[:] = data
     return data
@@ -81,11 +95,22 @@ def _time_selection(arr, selection, *, reps: int, warmup: int) -> tuple[float, f
     return samples[len(samples) // 2], samples[0]
 
 
+def _to_numpy(x) -> np.ndarray:
+    """Pull array contents to host regardless of whether x is cupy or numpy."""
+    if hasattr(x, "get"):
+        return cp.asnumpy(x)
+    return np.asarray(x)
+
+
 def _verify_equivalence(stock_arr, czarr_arr, selection) -> None:
-    """Both readers must return identical bytes for the same selection."""
-    a = np.asarray(stock_arr[selection])
-    b_raw = czarr_arr[selection]
-    b = cp.asnumpy(b_raw) if hasattr(b_raw, "get") else np.asarray(b_raw)
+    """Both readers must return identical bytes for the same selection.
+
+    ``configure_gpu()`` flips zarr's default buffer prototype to GPU
+    globally, so even the LocalStore path returns a cupy array.  Pull
+    everything to host before comparing.
+    """
+    a = _to_numpy(stock_arr[selection])
+    b = _to_numpy(czarr_arr[selection])
     if not np.array_equal(a, b):
         n_diff = int((a != b).sum())
         raise AssertionError(f"selection {selection}: {n_diff} elements differ")
@@ -99,12 +124,14 @@ def main() -> int:
     parser.add_argument("--warmup", type=int, default=3)
     args = parser.parse_args()
 
-    # Fixed geometry: 256x4096x4096 float32 in shards of (32, 4096, 4096)
-    # = 8 shards along axis 0, each ~512 MiB.  Inner chunks 32x256x256 =
-    # 8 MiB raw → fits well within nvCOMP / cupy alloc patterns.
-    shape = (256, 4096, 4096)
+    # Fixed geometry: 64x2048x2048 float32 in shards of (32, 2048, 2048)
+    # = 2 shards along axis 0, each ~512 MiB.  Inner chunks 32x256x256 =
+    # 8 MiB raw → still partial-shard for the test selections, but the
+    # whole dataset fits in ~1 GiB host RAM (the SLURM cap is 32 GiB,
+    # and parity checks materialise the slice on host + device).
+    shape = (64, 2048, 2048)
     inner_chunk = (32, 256, 256)
-    shard = (32, 4096, 4096)
+    shard = (32, 2048, 2048)
     dtype = np.dtype(np.float32)
 
     print(f"workload: shape={shape}, inner_chunk={inner_chunk}, shard={shard}, dtype={dtype}")
