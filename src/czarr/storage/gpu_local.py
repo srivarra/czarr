@@ -24,7 +24,9 @@ if TYPE_CHECKING:
 
 
 def _gpu_prototype_requested(prototype: BufferPrototype) -> bool:
-    return issubclass(prototype.buffer, gpu_buffer.Buffer)
+    from czarr.core.buffer import CzarrGpuBuffer
+
+    return issubclass(prototype.buffer, (gpu_buffer.Buffer, CzarrGpuBuffer))
 
 
 def _resolve_byte_range(byte_range: ByteRequest | None, file_size: int) -> tuple[int, int]:
@@ -41,7 +43,21 @@ def _resolve_byte_range(byte_range: ByteRequest | None, file_size: int) -> tuple
 
 
 def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteRequest | None) -> Buffer | None:
-    """Synchronous cuFile read into a fresh GPU buffer."""
+    """Synchronous cuFile read into a fresh GPU buffer.
+
+    Allocates via plain ``cp.empty`` regardless of prototype; cuFile
+    handles registration internally on first use.  An earlier Phase 3
+    iteration routed CzarrGpuBuffer prototypes through
+    ``CzarrGpuBuffer.empty`` (VMR-aligned + pre-registered with cuFile)
+    but VMR's per-allocation cost (cuMemCreate / cuMemAddressReserve /
+    cuMemMap + 2 MiB granularity) dominates at ~5 ms per chunk — net
+    5× regression on the H200 slice_compare workload.  The
+    register-once architecture only pays off with a pre-allocated
+    buffer pool (callers reuse one big registered slab across many
+    reads); without that pool the VMR allocation cost outweighs the
+    cuFile-register savings (which are also negligible in compat-mode
+    cuFile on VAST/Lustre).  Tracked as a follow-up to v0.1.
+    """
     try:
         st = os.stat(path)
     except FileNotFoundError:

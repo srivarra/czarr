@@ -38,6 +38,7 @@ if platform.system() != "Linux":
 import zarr
 
 from czarr.alloc import register_nvcomp_allocator, use_rmm_pool
+from czarr.array import CudaZarrArray, create_cuda_array, open_cuda_array
 from czarr.codecs import (
     ANS,
     LZ4,
@@ -69,6 +70,7 @@ def configure_gpu(
     stream_pool_size: int = 4,
     pinned_prealloc: Any = None,
     pipeline: bool = True,
+    codec_backend_overrides: dict[str, str] | None = None,
 ) -> None:
     """One-call setup for GPU-codec workloads.
 
@@ -118,12 +120,20 @@ def configure_gpu(
         If True (default), register :class:`CzarrPipeline` as zarr's
         default ``codec_pipeline``.  Set False to opt into per-array
         pipeline registration only.
+    codec_backend_overrides:
+        Per-codec backend pin, e.g. ``{"lz4": "nvcomp"}`` to force the
+        nvCOMP path for LZ4.  Overrides the per-codec default but loses
+        to a per-instance ``backend=`` kwarg.  ``None`` clears any prior
+        override map; pass ``{}`` to keep it empty without changing
+        other settings.
     """
+    from czarr.codecs._backend import set_backend_overrides
     from czarr.pipeline import CzarrPipeline
 
     if rmm_pool_gb is not None:
         use_rmm_pool(initial_size=int(rmm_pool_gb * (1 << 30)))
     register_nvcomp_allocator()
+    set_backend_overrides(codec_backend_overrides or {})
     if cufile_poll_mode and cufile_runtime.is_available():
         cufile_runtime.set_poll_mode(True, cufile_poll_threshold_kb)
 
@@ -158,6 +168,7 @@ __all__ = [
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
+    "CudaZarrArray",
     "Delta",
     "Deflate",
     "FixedScaleOffset",
@@ -170,6 +181,8 @@ __all__ = [
     "Zlib",
     "Zstd",
     "configure_gpu",
+    "create_cuda_array",
+    "open_cuda_array",
     "register_nvcomp_allocator",
     "use_rmm_pool",
 ]
