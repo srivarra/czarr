@@ -6,15 +6,29 @@ Inverse (decode): ``x = q.astype(dtype) / scale + offset``.
 Compatible with ``numcodecs.FixedScaleOffset``.  The typical use is
 ``dtype=float32, astype=int16`` for lossy compression of bounded-range
 floats: store quantised int16s on disk, recover floats on read.
+
+Two backends:
+
+* ``backend="cupy"`` (default) — cupy elementwise expression.  Fuses
+  into a single kernel via cupy's elementwise machinery.
+* ``backend="cccl"`` — :func:`cuda.compute.make_unary_transform`.  Same
+  cuda.compute toolchain as Delta; numba-cuda JITs the affine op into
+  a typed device function and caches the LTO-compiled kernel by scale
+  / offset bit-pattern.
+
+Both backends produce bit-identical output to numcodecs and to each
+other; ``backend`` is runtime and not persisted in Zarr v3 metadata.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
 
 import cupy as cp
 from zarr.abc.codec import ArrayArrayCodec
+
+from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
 
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike
@@ -39,15 +53,30 @@ class FixedScaleOffset(ArrayArrayCodec):
         Storage dtype after quantisation (typically integer).  ``None``
         = same as ``dtype`` (no real quantisation, useful only for
         round-trip testing).
+    backend:
+        Runtime impl choice.  ``"cupy"`` (default) uses cupy elementwise
+        expressions; ``"cccl"`` uses cuda.compute.  Not persisted.
     """
 
     is_fixed_size: ClassVar[bool] = True
     codec_name: ClassVar[str] = "fixedscaleoffset"
+    _supported_backends: ClassVar[tuple[CodecBackend, ...]] = ("cupy", "cccl")
+    _default_backend: ClassVar[CodecBackend] = "cupy"
 
     offset: float = 0.0
     scale: float = 1.0
     dtype: DTypeLike = "<f4"
     astype: DTypeLike | None = None
+    backend: CodecBackend | None = field(default=None, compare=False, repr=True)
+
+    def __post_init__(self) -> None:
+        chosen = resolve_backend_for_filter(
+            self.codec_name,
+            instance_backend=self.backend,
+            supported=self._supported_backends,
+            default=self._default_backend,
+        )
+        object.__setattr__(self, "backend", chosen)
 
     @property
     def _store_dtype(self) -> DTypeLike:
@@ -55,20 +84,28 @@ class FixedScaleOffset(ArrayArrayCodec):
 
     async def _decode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         q = cp.asarray(chunk_data.as_ndarray_like())
-        # cast to working dtype, undo the affine transform.
-        x = q.astype(self.dtype, copy=False)
-        x = x / self.scale + self.offset
-        return chunk_spec.prototype.nd_buffer.from_ndarray_like(x.reshape(chunk_spec.shape))
+        flat = q.ravel()
+        if self.backend == "cccl":
+            from czarr.codecs._native.fixedscaleoffset import decode_fso_native
+
+            x_flat = decode_fso_native(flat, dtype=self.dtype, scale=self.scale, offset=self.offset)
+        else:
+            x_flat = flat.astype(self.dtype, copy=False) / self.scale + self.offset
+        return chunk_spec.prototype.nd_buffer.from_ndarray_like(x_flat.reshape(chunk_spec.shape))
 
     async def _encode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         x = cp.asarray(chunk_data.as_ndarray_like())
-        q = (x - self.offset) * self.scale
-        # Round-to-nearest only when storing as integer (the typical lossy case);
-        # for float-to-float we leave the scaled values intact.
-        if cp.issubdtype(cp.dtype(self._store_dtype), cp.integer):
-            q = cp.around(q)
-        q = q.astype(self._store_dtype, copy=False)
-        return chunk_spec.prototype.nd_buffer.from_ndarray_like(q.reshape(chunk_spec.shape))
+        flat = x.ravel()
+        if self.backend == "cccl":
+            from czarr.codecs._native.fixedscaleoffset import encode_fso_native
+
+            q_flat = encode_fso_native(flat, astype=self._store_dtype, scale=self.scale, offset=self.offset)
+        else:
+            q_flat = (flat - self.offset) * self.scale
+            if cp.issubdtype(cp.dtype(self._store_dtype), cp.integer):
+                q_flat = cp.around(q_flat)
+            q_flat = q_flat.astype(self._store_dtype, copy=False)
+        return chunk_spec.prototype.nd_buffer.from_ndarray_like(q_flat.reshape(chunk_spec.shape))
 
     def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Encoded size depends on the storage dtype's itemsize."""
@@ -79,7 +116,11 @@ class FixedScaleOffset(ArrayArrayCodec):
         return (input_byte_length // src_item) * item
 
     def to_dict(self) -> dict[str, JSON]:
-        """Serialise codec config for storage in Zarr v3 metadata."""
+        """Serialise codec config for storage in Zarr v3 metadata.
+
+        ``backend`` is intentionally omitted — bitstream is the only
+        persisted identity.
+        """
         config: dict[str, JSON] = {
             "offset": float(self.offset),
             "scale": float(self.scale),
@@ -91,6 +132,10 @@ class FixedScaleOffset(ArrayArrayCodec):
 
     @classmethod
     def from_dict(cls, data: dict[str, JSON]) -> FixedScaleOffset:
-        """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
-        cfg = data.get("configuration", {k: v for k, v in data.items() if k != "name"})
+        """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}.
+
+        Tolerant of writers that leak ``backend`` into the configuration.
+        """
+        cfg = dict(data.get("configuration", {k: v for k, v in data.items() if k != "name"}))
+        cfg.pop("backend", None)
         return cls(**cfg)
