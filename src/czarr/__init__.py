@@ -63,7 +63,7 @@ from czarr.storage import GPULocalStore, cufile_runtime
 def configure_gpu(
     *,
     batch_size: int | None = None,
-    decode_batch_size: int = 8,
+    decode_batch_size: int | None = None,
     async_concurrency: int = 32,
     rmm_pool_gb: float | None = None,
     cufile_poll_mode: bool = False,
@@ -99,14 +99,13 @@ def configure_gpu(
         "all chunks in one decode call" (max nvCOMP batching, no
         read/decode overlap).
     decode_batch_size:
-        Micro-batch size for the read/decode pipeline.  Each micro-batch
-        runs ``store.get`` for its chunks and then nvCOMP decode on the
-        whole micro-batch; multiple micro-batches run concurrently so
-        decode of batch K overlaps the reads of batches K+1..K+N.  Default
-        8 — small enough to keep reads + decode interleaved on the
-        timeline, large enough that each nvCOMP call still amortises its
-        per-call overhead.  Set to ``sys.maxsize`` to disable the
-        overlap pipeline and decode everything in one call.
+        Micro-batch size for the read/decode pipeline.  ``None`` (default)
+        sends every chunk through a single nvCOMP call — best on our
+        H200 bench because nvCOMP has ~35 ms per-call overhead and a
+        per-thread codec warmup that smaller batches keep paying.
+        Set to a finite value (8, 16, 32) only if profiling shows you
+        can amortise that cost; see ``bench/overlap/sweep_h200`` for
+        evidence that the naive microbatch knob alone regresses 4-15×.
     async_concurrency:
         Parallel ``store.get`` calls inside a batch.  Default 32.
     rmm_pool_gb:
@@ -150,7 +149,12 @@ def configure_gpu(
 
     CzarrPipeline.configure(stream_pool_size=stream_pool_size, pinned_prealloc=pinned_prealloc)
 
-    effective_batch_size = batch_size if batch_size is not None else decode_batch_size
+    if batch_size is not None:
+        effective_batch_size = batch_size
+    elif decode_batch_size is not None:
+        effective_batch_size = decode_batch_size
+    else:
+        effective_batch_size = sys.maxsize
     settings: dict[str, Any] = {
         "codec_pipeline.batch_size": effective_batch_size,
         "async.concurrency": async_concurrency,
