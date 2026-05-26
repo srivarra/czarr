@@ -29,6 +29,7 @@ from czarr.codecs.compressors import (
     Zstd,
 )
 from czarr.codecs.filters import BitRound, Delta, FixedScaleOffset, Shuffle
+from czarr.codecs.sharding import CzarrShardingCodec
 
 # Register all codec classes with zarr's codec registry.  Compat codecs
 # and filters shadow stdlib codec_ids ("zstd", "lz4", "gzip", "zlib",
@@ -59,6 +60,7 @@ __all__ = [
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
+    "CzarrShardingCodec",
     "Delta",
     "Deflate",
     "FixedScaleOffset",
