@@ -24,7 +24,9 @@ if TYPE_CHECKING:
 
 
 def _gpu_prototype_requested(prototype: BufferPrototype) -> bool:
-    return issubclass(prototype.buffer, gpu_buffer.Buffer)
+    from czarr.core.buffer import CzarrGpuBuffer
+
+    return issubclass(prototype.buffer, (gpu_buffer.Buffer, CzarrGpuBuffer))
 
 
 def _resolve_byte_range(byte_range: ByteRequest | None, file_size: int) -> tuple[int, int]:
