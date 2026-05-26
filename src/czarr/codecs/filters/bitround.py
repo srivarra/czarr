@@ -1,12 +1,19 @@
 """BitRound — GPU ArrayArrayCodec for IEEE-754 mantissa truncation.
 
 Forward (encode): masks off ``mantissa_bits - keepbits`` low bits of the
-mantissa, rounding to even.  Decode is the identity (the bits are
-already truncated; the value is recoverable as-is).
+mantissa, rounding **half-to-even** (banker's rounding) to match
+``numcodecs.BitRound``.  Decode is the identity (the bits are already
+truncated; the value is recoverable as-is).
 
 Compatible with ``numcodecs.BitRound``.  Useful for lossy compression of
 floats where you don't care about sub-percent precision — the truncated
 trailing zeros compress extremely well downstream.
+
+No backend dispatch: BitRound is pure integer bit-twiddling, which
+cupy's elementwise machinery already fuses well.  cuda.compute would
+need a bespoke make_unary_transform closure with no clear performance
+upside (no kernel-launch savings vs cupy on small N, no algorithmic
+parallelism on large N).
 """
 
 from __future__ import annotations
@@ -30,6 +37,10 @@ _MANTISSA_BITS = {
     cp.dtype("float64"): 52,
 }
 
+# Integer view dtype per float itemsize — used to manipulate the bit
+# pattern in-place.
+_INT_VIEW = {2: cp.uint16, 4: cp.uint32, 8: cp.uint64}
+
 
 @dataclass(frozen=True)
 class BitRound(ArrayArrayCodec):
@@ -39,8 +50,9 @@ class BitRound(ArrayArrayCodec):
     ----------
     keepbits:
         Number of mantissa bits to retain.  Trailing
-        ``mantissa_bits - keepbits`` bits are masked off (with
-        round-to-even).
+        ``mantissa_bits - keepbits`` bits are masked off using
+        round-half-to-even (banker's rounding) — same semantics as
+        ``numcodecs.BitRound``.
     """
 
     is_fixed_size: ClassVar[bool] = True
@@ -49,8 +61,8 @@ class BitRound(ArrayArrayCodec):
     keepbits: int = 12
 
     async def _decode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
-        # Bits already truncated on encode; decode is identity.  Return a
-        # buffer of the right prototype so downstream codecs see a
+        # Bits already truncated on encode; decode is identity.  Return
+        # a buffer of the right prototype so downstream codecs see a
         # device-side array even if the input was host.
         arr = chunk_data.as_ndarray_like()
         out = cp.asarray(arr) if not isinstance(arr, cp.ndarray) else arr
@@ -65,16 +77,7 @@ class BitRound(ArrayArrayCodec):
         if shift <= 0:
             return chunk_spec.prototype.nd_buffer.from_ndarray_like(x)
 
-        # Round-to-nearest-even via add-half then mask-truncate, using
-        # an integer view to manipulate the bit pattern.
-        int_dtype = cp.dtype({2: "uint16", 4: "uint32", 8: "uint64"}[x.dtype.itemsize])
-        bits = x.view(int_dtype).copy()
-        # Add half-ULP at the truncation boundary; even-rounding by OR'ing
-        # the sticky bit comes free with cuda integer add.
-        half = cp.uint64(1) << cp.uint64(shift - 1)
-        mask = ~((cp.uint64(1) << cp.uint64(shift)) - cp.uint64(1))
-        bits = (bits.astype(cp.uint64) + half) & mask
-        out = bits.astype(int_dtype).view(x.dtype)
+        out = _bitround_even(x, shift)
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(out.reshape(chunk_spec.shape))
 
     def compute_encoded_size(self, input_byte_length: int, _chunk_spec: ArraySpec) -> int:
@@ -93,3 +96,39 @@ class BitRound(ArrayArrayCodec):
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
         cfg = data.get("configuration", {k: v for k, v in data.items() if k != "name"})
         return cls(**cfg)
+
+
+def _bitround_even(x: cp.ndarray, shift: int) -> cp.ndarray:
+    """Truncate ``shift`` low mantissa bits of ``x`` with round-half-to-even.
+
+    Standard banker's-rounding bit twiddle.  For each value the
+    discarded low ``shift`` bits are split into the half-bit (position
+    ``shift-1``) and the sticky bits (positions ``0..shift-2``); we
+    round up when:
+
+    * sticky != 0 and half-bit is 1  (strictly greater than half), OR
+    * sticky == 0, half-bit is 1, and the surviving lsb (bit at
+      position ``shift``) is 1  (exactly half + odd lsb → round to even).
+
+    Operates on the integer view of ``x`` so the sign and exponent
+    bits ride along unchanged — only mantissa is affected.
+    """
+    int_dtype = cp.dtype(_INT_VIEW[x.dtype.itemsize])
+    bits = x.view(int_dtype).copy()
+
+    one = int_dtype.type(1)
+    shift_t = int_dtype.type(shift)
+    half = one << (shift_t - one)
+    low_mask = (one << shift_t) - one
+
+    low = bits & low_mask
+    lsb = (bits >> shift_t) & one
+    # Strictly greater than half OR exactly half with odd lsb.
+    round_up = (low > half) | ((low == half) & (lsb == one))
+
+    truncated = bits & ~low_mask
+    # Adding `one << shift_t` to a value whose lower bits are already
+    # zero is the bit-level "carry into lsb" we want.  Cast the bool
+    # mask to the int view so `+` stays inside the integer view.
+    bumped = truncated + (round_up.astype(int_dtype) << shift_t)
+    return bumped.view(x.dtype)
