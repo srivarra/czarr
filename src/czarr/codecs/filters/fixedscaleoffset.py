@@ -16,8 +16,17 @@ Two backends:
   a typed device function and caches the LTO-compiled kernel by scale
   / offset bit-pattern.
 
-Both backends produce bit-identical output to numcodecs and to each
-other; ``backend`` is runtime and not persisted in Zarr v3 metadata.
+The ``"cupy"`` backend produces bit-identical output to numcodecs
+(cupy.around mirrors np.around).  The ``"cccl"`` backend may differ
+from numcodecs by ~ULP on a handful of exact-half values per chunk
+(~0.003% on the 16 MiB f32 spike) — numba's CUDA codegen may fuse
+the affine multiply-add into an fma, putting borderline values on
+the other side of the round-half-to-even boundary.  Use ``"cupy"``
+when bit-exact round-trip with CPU numcodecs matters; use ``"cccl"``
+when throughput matters more than ULP-scale rounding drift on
+quantisation boundaries.
+
+``backend`` is runtime and not persisted in Zarr v3 metadata.
 """
 
 from __future__ import annotations
