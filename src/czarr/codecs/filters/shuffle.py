@@ -7,12 +7,16 @@ swaps adjacent ``elementsize`` byte rows so each plane is contiguous.
 
 Two backends:
 
-* ``backend="cutile"`` (default) — :mod:`cuda.tile` transpose; ~2.5x
-  faster than cupy reshape/transpose on A40 (~327 GiB/s @ typesize=2).
-  Has a known sm_90 (Hopper) bug for certain shapes — fall back to
-  cupy if you hit it.
-* ``backend="cupy"`` — cupy ``reshape/transpose/ascontiguousarray``.
-  Slower but works on every supported GPU, including H100/H200.
+* ``backend="cupy"`` (default) — cupy ``reshape/transpose/ascontiguousarray``.
+  Works on every supported GPU including H100/H200.  This is the
+  safe default — cuda-tile 1.3 fails to compile on sm_90 (``tileiras:
+  Cannot find option named 'sm_90'``), so the cuTile path crashes
+  on Hopper for any shape.
+* ``backend="cutile"`` — :mod:`cuda.tile` transpose; ~2.5x faster than
+  cupy on A40 (~327 GiB/s @ typesize=2, validated by the Phase 2
+  filter bench sweep).  Opt-in for sm_<90 users who need the
+  bandwidth; broken on H100/H200 until a cuTile release ships with
+  sm_90 support.
 
 cuda.compute has no transpose primitive, so the byte-plane transpose
 stays out of the cccl family for now (would need a custom Raw/Program
@@ -46,15 +50,15 @@ class Shuffle(BytesBytesCodec):
         Number of bytes per element to shuffle across.  Must divide the
         chunk byte length.
     backend:
-        Runtime impl choice.  ``"cutile"`` (default) uses the cuda.tile
-        transpose kernel; ``"cupy"`` uses reshape/transpose primitives.
-        Not persisted.
+        Runtime impl choice.  ``"cupy"`` (default) is Hopper-safe;
+        ``"cutile"`` opts in to the cuda.tile transpose kernel for ~2.5x
+        more bandwidth on A40 (broken on H100/H200).  Not persisted.
     """
 
     is_fixed_size: ClassVar[bool] = False
     codec_name: ClassVar[str] = "shuffle"
-    _supported_backends: ClassVar[tuple[CodecBackend, ...]] = ("cutile", "cupy")
-    _default_backend: ClassVar[CodecBackend] = "cutile"
+    _supported_backends: ClassVar[tuple[CodecBackend, ...]] = ("cupy", "cutile")
+    _default_backend: ClassVar[CodecBackend] = "cupy"
 
     elementsize: int = 4
     backend: CodecBackend | None = field(default=None, compare=False, repr=True)

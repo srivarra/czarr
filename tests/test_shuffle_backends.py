@@ -34,8 +34,9 @@ def _reset_overrides() -> None:
 class TestShuffleBackend:
     """Per-instance backend selection on ``czarr.Shuffle``."""
 
-    def test_default_picks_cutile(self) -> None:
-        assert czarr.Shuffle(elementsize=4).backend == "cutile"
+    def test_default_picks_cupy(self) -> None:
+        """Default is the Hopper-safe cupy path; cuTile is opt-in only."""
+        assert czarr.Shuffle(elementsize=4).backend == "cupy"
 
     def test_explicit_cupy(self) -> None:
         assert czarr.Shuffle(elementsize=4, backend="cupy").backend == "cupy"
@@ -53,12 +54,12 @@ class TestShuffleBackend:
             czarr.Shuffle(elementsize=4, backend="cccl")  # type: ignore[arg-type]
 
     def test_override_takes_effect_at_construction(self) -> None:
-        set_backend_overrides({"shuffle": "cupy"})
-        assert czarr.Shuffle(elementsize=4).backend == "cupy"
+        set_backend_overrides({"shuffle": "cutile"})
+        assert czarr.Shuffle(elementsize=4).backend == "cutile"
 
     def test_per_instance_kwarg_beats_override(self) -> None:
-        set_backend_overrides({"shuffle": "cupy"})
-        assert czarr.Shuffle(elementsize=4, backend="cutile").backend == "cutile"
+        set_backend_overrides({"shuffle": "cutile"})
+        assert czarr.Shuffle(elementsize=4, backend="cupy").backend == "cupy"
 
 
 # ---------------------------------------------------------------------------
@@ -85,22 +86,22 @@ class TestMetadataRoundTrip:
         codec = czarr.Shuffle.from_dict(
             {
                 "name": "shuffle",
-                "configuration": {"elementsize": 4, "backend": "cupy"},
+                "configuration": {"elementsize": 4, "backend": "cutile"},
             }
         )
         assert codec.elementsize == 4
         # Backend resolves via overrides + class default, NOT the leaked field.
-        assert codec.backend == "cutile"
+        assert codec.backend == "cupy"
 
     def test_from_dict_respects_override(self) -> None:
-        set_backend_overrides({"shuffle": "cupy"})
+        set_backend_overrides({"shuffle": "cutile"})
         codec = czarr.Shuffle.from_dict(
             {
                 "name": "shuffle",
                 "configuration": {"elementsize": 4},
             }
         )
-        assert codec.backend == "cupy"
+        assert codec.backend == "cutile"
 
     def test_equality_ignores_backend(self) -> None:
         """Two Shuffle codecs with different backends are equal."""
