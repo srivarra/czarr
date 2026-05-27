@@ -33,8 +33,10 @@ from czarr.codecs.sharding import CzarrShardingCodec
 
 # Register all codec classes with zarr's codec registry.  Compat codecs
 # and filters shadow stdlib codec_ids ("zstd", "lz4", "gzip", "zlib",
-# "shuffle", "delta", "fixedscaleoffset", "bitround"); native codecs use
-# "czarr.*" so they never collide.
+# "shuffle", "delta", "fixedscaleoffset", "bitround", "sharding_indexed");
+# native codecs use "czarr.*" so they never collide.  When multiple
+# classes register at the same codec_id, zarr selects via
+# ``zarr.config["codecs"][<id>]`` — set in :func:`czarr.configure_gpu`.
 for _cls in (
     ANS,
     Bitcomp,
@@ -50,6 +52,7 @@ for _cls in (
     Delta,
     FixedScaleOffset,
     BitRound,
+    CzarrShardingCodec,
 ):
     register_codec(_cls.codec_name, _cls)
 
@@ -60,7 +63,6 @@ __all__ = [
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
-    "CzarrShardingCodec",
     "Delta",
     "Deflate",
     "FixedScaleOffset",

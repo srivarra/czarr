@@ -27,7 +27,7 @@ array creation, or globally via :func:`czarr.configure_gpu` (TODO).
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from zarr.abc.store import RangeByteRequest
 from zarr.codecs.sharding import ShardingCodec, _ShardingByteGetter
@@ -59,9 +59,15 @@ _DEFAULT_MAX_GAP_BYTES = 0
 class CzarrShardingCodec(ShardingCodec):
     """ShardingCodec subclass that coalesces partial-shard reads.
 
-    Inherits everything from :class:`zarr.codecs.ShardingCodec` — same
-    on-disk format, same codec name (``"sharding_indexed"``), same
-    metadata schema.  Only the partial-shard chunk-fetch loop changes.
+    Internal class — registered against the same codec name
+    (``"sharding_indexed"``) as :class:`zarr.codecs.ShardingCodec` so
+    zarr's registry resolves all existing v3 sharded metadata to this
+    class on read.  Users don't import or construct it directly;
+    :func:`czarr.configure_gpu` selects it via ``zarr.config``.
+
+    Same on-disk format, same codec name, same metadata schema.  Only
+    the partial-shard chunk-fetch loop changes — see
+    :meth:`_decode_partial_single`.
 
     Two extra knobs control the coalesce, set at construction time
     (runtime-only — never written to metadata):
@@ -70,6 +76,11 @@ class CzarrShardingCodec(ShardingCodec):
     * ``max_gap_bytes`` — bytes of "no one asked for this" the fuser
       will swallow to merge two near-adjacent ranges.  Default 0.
     """
+
+    # ClassVar surfaced for the registration loop in ``codecs/__init__``;
+    # zarr's parent ShardingCodec uses a hard-coded "sharding_indexed"
+    # literal and doesn't expose codec_name as a class attribute.
+    codec_name: ClassVar[str] = "sharding_indexed"
 
     # Reserve slots so the frozen-dataclass parent's __slots__-like
     # behaviour (via object.__setattr__) carries through.

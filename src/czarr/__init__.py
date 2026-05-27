@@ -47,7 +47,6 @@ from czarr.codecs import (
     Cascaded,
     Checksum,
     CudaBytesBytesCodec,
-    CzarrShardingCodec,
     Deflate,
     Delta,
     FixedScaleOffset,
@@ -58,6 +57,11 @@ from czarr.codecs import (
     Zlib,
     Zstd,
 )
+
+# Internal — registered against "sharding_indexed" so zarr's registry
+# resolves all v3 sharded metadata to the coalescing variant; not part
+# of the public API.
+from czarr.codecs.sharding import CzarrShardingCodec as _CzarrShardingCodec
 from czarr.storage import GPULocalStore, cufile_runtime
 
 
@@ -170,9 +174,12 @@ def configure_gpu(
     else:
         settings["codec_pipeline.path"] = "zarr.core.codec_pipeline.BatchedCodecPipeline"
     # Resolve registry conflicts where czarr and zarr both registered a
-    # codec under the same id (zstd, gzip, shuffle, bitround, ...).
-    # Without this zarr emits a ZarrUserWarning on every read.
-    for cls in (Zstd, LZ4, Gzip, Zlib, Shuffle, Delta, FixedScaleOffset, BitRound):
+    # codec under the same id (zstd, gzip, shuffle, bitround,
+    # sharding_indexed, ...).  Without this zarr emits a ZarrUserWarning
+    # on every read.  CzarrShardingCodec is selected here so existing
+    # sharded v3 stores transparently get the coalescing partial-shard
+    # decode path.
+    for cls in (Zstd, LZ4, Gzip, Zlib, Shuffle, Delta, FixedScaleOffset, BitRound, _CzarrShardingCodec):
         settings[f"codecs.{cls.codec_name}"] = f"{cls.__module__}.{cls.__qualname__}"
 
     zarr.config.set(settings)
@@ -186,7 +193,6 @@ __all__ = [
     "Checksum",
     "CudaBytesBytesCodec",
     "CudaZarrArray",
-    "CzarrShardingCodec",
     "Delta",
     "Deflate",
     "FixedScaleOffset",
