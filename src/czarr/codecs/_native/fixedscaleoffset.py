@@ -20,15 +20,10 @@ from typing import TYPE_CHECKING, Any
 import cupy as cp
 import numpy as np
 
+from czarr.codecs._native import import_cccl
+
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike
-
-
-def _import_cccl() -> Any:
-    """Lazy import of :mod:`cuda.compute`.  See `_native.delta` for rationale."""
-    import cuda.compute as cc
-
-    return cc
 
 
 # (op_kind, in_dtype, out_dtype, scale_bits, offset_bits) → cached transformer.
@@ -55,7 +50,7 @@ def _make_decoder(
     transformer = _TRANSFORM_CACHE.get(key)
     if transformer is not None:
         return transformer
-    cc = _import_cccl()
+    cc = import_cccl()
     s = float(scale)
     o = float(offset)
 
@@ -87,7 +82,7 @@ def _make_encoder(
     transformer = _TRANSFORM_CACHE.get(key)
     if transformer is not None:
         return transformer
-    cc = _import_cccl()
+    cc = import_cccl()
     s = float(scale)
     o = float(offset)
     if integer_out:

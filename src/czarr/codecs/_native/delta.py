@@ -23,22 +23,10 @@ from typing import TYPE_CHECKING, Any
 import cupy as cp
 import numpy as np
 
+from czarr.codecs._native import import_cccl
+
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike
-
-
-def _import_cccl() -> Any:
-    """Lazy import of :mod:`cuda.compute`.
-
-    cccl (cuda-cccl + numba-cuda) is an optional dependency — the
-    cupy-backed Delta path doesn't need it.  Deferring the import lets
-    the module load cleanly on hosts without cccl; users that pick
-    ``backend="cccl"`` hit a clear ``ModuleNotFoundError`` at decode
-    time rather than at import time.
-    """
-    import cuda.compute as cc
-
-    return cc
 
 
 # (dtype) → cached cuda.compute scanner.  Per-dtype because the scanner
@@ -61,7 +49,7 @@ def _scanner_for(arr_in: cp.ndarray, arr_out: cp.ndarray) -> Any:
         def _add(a, b):
             return a + b
 
-        cc = _import_cccl()
+        cc = import_cccl()
         scanner = cc.make_inclusive_scan(d_in=arr_in, d_out=arr_out, op=_add)
         _SCANNER_CACHE[key] = scanner
     return scanner
