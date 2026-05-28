@@ -1,8 +1,10 @@
-"""Native cuda-python codec implementations.
+"""Native cuda.compute filter implementations.
 
-Each module exposes a top-level ``decode_<codec>_native`` / ``encode_<codec>_native``
-function that the public codec class dispatches to when ``backend="native"``.
-The wire format must be bit-identical to nvCOMP / numcodecs for the same
-codec — see ``docs/planning/research/cuda-array/08-two-tier-codecs.md`` §2
-for the bitstream-identity rule.
+Each module exposes ``decode_<codec>_native`` / ``encode_<codec>_native``
+functions that the filter codec dispatches to when ``backend="cccl"``.
+Output must be bit-identical to the cupy backend for the same filter.
+
+(Compressors are pure nvCOMP wrappers — czarr no longer ships a
+hand-written native compressor.  These modules serve the filters:
+Delta and FixedScaleOffset.)
 """
