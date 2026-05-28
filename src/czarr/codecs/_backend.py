@@ -9,8 +9,6 @@ carries the backend choice.
 Compressors are pure nvCOMP wrappers (no backend switch): czarr dropped
 its hand-written native codecs after profiling showed the codec is
 rarely the read-path bottleneck.  This module now serves the filters.
-
-The design is in ``docs/planning/research/cuda-array/08-two-tier-codecs.md``.
 """
 
 from __future__ import annotations
@@ -39,11 +37,6 @@ def set_backend_overrides(overrides: Mapping[str, CodecBackend]) -> None:
     """
     _BACKEND_OVERRIDES.clear()
     _BACKEND_OVERRIDES.update(overrides)
-
-
-def get_backend_overrides() -> Mapping[str, CodecBackend]:
-    """Read-only view of the current overrides.  Test helper."""
-    return dict(_BACKEND_OVERRIDES)
 
 
 def resolve_default_backend(

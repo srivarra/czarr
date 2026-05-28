@@ -3,11 +3,9 @@
 * :mod:`czarr.codecs.compressors` — BytesBytesCodec implementations
   (Zstd, LZ4, Gzip, Zlib, ANS, Bitcomp, Cascaded, Deflate, GDeflate,
   Snappy).
-* :mod:`czarr.codecs.filters` — ArrayArrayCodec implementations
-  (populated in Phase 3 — Bitshuffle, Shuffle, Delta, FixedScaleOffset,
-  BitRound).
-* :mod:`czarr.codecs.checksum` — checksum BytesBytesCodecs (populated in
-  Phase 5 — Crc32c).
+* :mod:`czarr.codecs.filters` — ArrayArrayCodec / BytesBytesCodec
+  filters: Shuffle, Delta, FixedScaleOffset, BitRound.
+* :mod:`czarr.codecs.checksum` — checksum BytesBytesCodecs (Crc32c).
 
 Public symbols are re-exported from this module so users can write
 ``from czarr.codecs import Zstd`` (or just ``from czarr import Zstd``).

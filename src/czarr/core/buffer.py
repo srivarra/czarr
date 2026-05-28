@@ -53,8 +53,10 @@ def _device_mr() -> VirtualMemoryResource:
     delivers a fresh 4 KiB-aligned virtual address per call (verified
     in ``bench/buffer/alignment_probe.py``). The cost is granularity:
     every allocation pads up to the device's VMM granularity (commonly
-    2 MiB on Hopper / Ampere). Phase 5 bench will tell us whether we
-    want to slab + sub-allocate on top.
+    2 MiB on Hopper / Ampere), so per-call allocation is expensive —
+    :class:`czarr.core.slab.CuFileSlabPool` sub-allocates from a few
+    pre-registered slabs on top of this, which is what
+    ``CzarrGpuBuffer.empty`` uses.
     """
     global _DEVICE_MR
     if _DEVICE_MR is None:
