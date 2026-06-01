@@ -40,7 +40,6 @@ class _ImplKwargs(TypedDict, total=False):
     """
 
     queue_depth: int
-    stream_pool_size: int
     microbatch_size: int
 
 
@@ -56,7 +55,6 @@ class _CudaArrayImpl:
 
     async_array: zarr.AsyncArray
     queue_depth: int = 16
-    stream_pool_size: int = 4
     microbatch_size: int = 8
 
     @classmethod

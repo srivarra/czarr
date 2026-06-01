@@ -48,7 +48,6 @@ class CudaZarrArrayKwargs(TypedDict, total=False):
     """
 
     queue_depth: int
-    stream_pool_size: int
     microbatch_size: int
 
 

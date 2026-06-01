@@ -57,9 +57,8 @@ def open_cuda_array(
     pass a :class:`zarr.abc.store.Store` instance to opt into a different
     backend.
 
-    Tuning kwargs (``queue_depth``, ``microbatch_size``,
-    ``stream_pool_size``) are threaded into the orchestrator; non-tuning
-    kwargs raise :class:`TypeError`.
+    Tuning kwargs (``queue_depth``, ``microbatch_size``) are threaded
+    into the orchestrator; non-tuning kwargs raise :class:`TypeError`.
     """
     resolved = _resolve_store(store, mode=mode)
     arr = zarr.open_array(store=resolved, path=path, mode=mode)

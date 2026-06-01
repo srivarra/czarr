@@ -73,7 +73,6 @@ def configure_gpu(
     rmm_pool_gb: float | None = None,
     cufile_poll_mode: bool = False,
     cufile_poll_threshold_kb: int = 4,
-    stream_pool_size: int = 4,
     pinned_prealloc: Any = None,
     pipeline: bool = True,
     codec_backend_overrides: dict[str, str] | None = None,
@@ -84,8 +83,7 @@ def configure_gpu(
 
     * The :class:`czarr.pipeline.CzarrPipeline` becomes the global
       ``codec_pipeline`` (unless ``pipeline=False``).  Codecs route through
-      it and the shared :class:`StreamPool` + :class:`PinnedHostPool`
-      substrate.
+      it and the shared :class:`PinnedHostPool` substrate.
     * Every ``arr[:]`` (and any other selection) decodes the whole chunk
       batch in a single nvCOMP call — sets ``codec_pipeline.batch_size``
       to ``sys.maxsize`` so one ``CudaBytesBytesCodec.decode([all])``
@@ -125,9 +123,6 @@ def configure_gpu(
     cufile_poll_threshold_kb:
         Max I/O size (KiB) that uses polling when ``cufile_poll_mode=True``.
         Larger I/Os fall back to IRQ-driven completion regardless.
-    stream_pool_size:
-        Number of CUDA streams in the shared :class:`StreamPool`.
-        Default 4.
     pinned_prealloc:
         Optional iterable of ``(size, count)`` tuples for the shared
         :class:`PinnedHostPool` pre-allocation hint.
@@ -152,7 +147,7 @@ def configure_gpu(
     if cufile_poll_mode and cufile_runtime.is_available():
         cufile_runtime.set_poll_mode(True, cufile_poll_threshold_kb)
 
-    CzarrPipeline.configure(stream_pool_size=stream_pool_size, pinned_prealloc=pinned_prealloc)
+    CzarrPipeline.configure(pinned_prealloc=pinned_prealloc)
 
     if batch_size is not None:
         effective_batch_size = batch_size

@@ -28,7 +28,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from cuda.core import Buffer, LegacyPinnedMemoryResource
+from cuda.core import Buffer, Device, LegacyPinnedMemoryResource
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -53,6 +53,10 @@ class PinnedHostPool:
     """
 
     def __init__(self, prealloc: Iterable[tuple[int, int]] | None = None) -> None:
+        # Pinned allocation needs a current CUDA context bound to this
+        # thread; bind it ourselves rather than relying on another pool
+        # having done so first.
+        Device().set_current()
         self._mr = LegacyPinnedMemoryResource()
         self._free: dict[int, list[Buffer]] = defaultdict(list)
         self._live: int = 0  # count of buffers handed out and not yet released
@@ -92,7 +96,7 @@ class PinnedHostPool:
         """Free all buffers, both live-on-loan and on the free list.
 
         Caller is responsible for ensuring no buffer is still in use
-        when this is called — typically after a ``StreamPool.sync_all()``.
+        when this is called — typically after the device has gone idle.
         """
         for bucket in self._free.values():
             for buf in bucket:
