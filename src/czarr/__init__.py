@@ -44,6 +44,7 @@ from czarr.codecs import (
     LZ4,
     Bitcomp,
     BitRound,
+    Blosc,
     Cascaded,
     Checksum,
     CudaBytesBytesCodec,
@@ -174,7 +175,7 @@ def configure_gpu(
     # on every read.  CzarrShardingCodec is selected here so existing
     # sharded v3 stores transparently get the coalescing partial-shard
     # decode path.
-    for cls in (Zstd, LZ4, Gzip, Zlib, Shuffle, Delta, FixedScaleOffset, BitRound, _CzarrShardingCodec):
+    for cls in (Zstd, LZ4, Gzip, Zlib, Blosc, Shuffle, Delta, FixedScaleOffset, BitRound, _CzarrShardingCodec):
         settings[f"codecs.{cls.codec_name}"] = f"{cls.__module__}.{cls.__qualname__}"
 
     zarr.config.set(settings)
@@ -184,6 +185,7 @@ __all__ = [
     "ANS",
     "Bitcomp",
     "BitRound",
+    "Blosc",
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
