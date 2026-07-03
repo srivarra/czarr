@@ -13,6 +13,7 @@ import atexit
 import ctypes
 import os
 import threading
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
@@ -41,6 +42,7 @@ def _close() -> None:
     global _opened
     if not _opened:
         return
+    clear_handle_cache()  # deregister cached handles before the driver goes away
     try:
         cufile.driver_close()
     except cufile.cuFileError:
@@ -151,15 +153,127 @@ def registered_handle(fd: int):
             pass
 
 
-def read_into(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:
-    """Read ``size`` bytes from ``path`` (at ``file_offset``) into device memory at ``dev_ptr``."""
-    ensure_driver_open()
-    fd = os.open(os.fspath(path), os.O_RDONLY)
+# ---------------------------------------------------------------------------
+# Persistent fd/handle cache
+#
+# open + handle_register cost ~1 ms per call on H100 (~3 ms in compat mode),
+# paid per file per read before this cache.  Zarr reads hit the same chunk
+# and shard files over and over, so registered handles are kept in a
+# refcounted LRU keyed by path.  Every acquire revalidates the file's stat
+# signature (inode, mtime, size): a rewritten/replaced file is reopened, so
+# cached handles never serve stale data.  Entries evicted while a read is in
+# flight are closed by the last releaser, never under a reader.
+# ---------------------------------------------------------------------------
+
+_HANDLE_CACHE_CAP = 128  # max cached fds; well under default ulimits
+
+
+class _CachedHandle:
+    __slots__ = ("dead", "descr", "fd", "handle", "refs", "sig")
+
+    def __init__(self, fd: int, handle: object, descr: object, sig: tuple[int, int, int]) -> None:
+        self.fd = fd
+        self.handle = handle
+        self.descr = descr  # keep the ctypes Descr alive alongside the handle
+        self.sig = sig
+        self.refs = 0
+        self.dead = False
+
+
+_handle_cache: OrderedDict[str, _CachedHandle] = OrderedDict()
+_handle_cache_lock = threading.Lock()
+
+
+def _destroy_entry(entry: _CachedHandle) -> None:
     try:
-        with registered_handle(fd) as h:
-            return cufile.read(h, dev_ptr, size, file_offset, 0)
-    finally:
+        cufile.handle_deregister(entry.handle)
+    except cufile.cuFileError:
+        pass
+    try:
+        os.close(entry.fd)
+    except OSError:
+        pass
+
+
+def _register_path(path: str) -> tuple[int, object, object]:
+    fd = os.open(path, os.O_RDONLY)
+    descr = cufile.Descr()
+    s = _CUfileDescr.from_address(int(descr))
+    s.type = int(cufile.FileHandleType.OPAQUE_FD)
+    s.handle.fd = fd
+    s.fs_ops = 0
+    try:
+        handle = cufile.handle_register(int(descr))
+    except cufile.cuFileError:
         os.close(fd)
+        raise
+    return fd, handle, descr
+
+
+def _acquire_handle(path) -> _CachedHandle:
+    """Cached-or-fresh registered handle for ``path``; pair with :func:`_release_handle`."""
+    key = os.fspath(path)
+    st = os.stat(key)  # noqa: PTH116 — key is already a plain string; Path() round-trip buys nothing
+    sig = (st.st_ino, st.st_mtime_ns, st.st_size)
+    with _handle_cache_lock:
+        entry = _handle_cache.get(key)
+        if entry is not None:
+            if entry.sig == sig:
+                entry.refs += 1
+                _handle_cache.move_to_end(key)
+                return entry
+            # Same path, different file (rewrite/replace) — retire the entry.
+            entry.dead = True
+            del _handle_cache[key]
+            if entry.refs == 0:
+                _destroy_entry(entry)
+        fd, handle, descr = _register_path(key)
+        entry = _CachedHandle(fd, handle, descr, sig)
+        entry.refs = 1
+        _handle_cache[key] = entry
+        while len(_handle_cache) > _HANDLE_CACHE_CAP:
+            _evict_key, evicted = _handle_cache.popitem(last=False)
+            evicted.dead = True
+            if evicted.refs == 0:
+                _destroy_entry(evicted)
+        return entry
+
+
+def _release_handle(entry: _CachedHandle) -> None:
+    with _handle_cache_lock:
+        entry.refs -= 1
+        if entry.dead and entry.refs == 0:
+            _destroy_entry(entry)
+
+
+def clear_handle_cache() -> None:
+    """Deregister and close every cached handle (in-flight reads finish first)."""
+    with _handle_cache_lock:
+        for entry in _handle_cache.values():
+            entry.dead = True
+            if entry.refs == 0:
+                _destroy_entry(entry)
+        _handle_cache.clear()
+
+
+def handle_cache_len() -> int:
+    """Number of live cached handles (introspection for tests/telemetry)."""
+    with _handle_cache_lock:
+        return len(_handle_cache)
+
+
+def read_into(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:
+    """Read ``size`` bytes from ``path`` (at ``file_offset``) into device memory at ``dev_ptr``.
+
+    File handles are served from the process-wide registered-handle cache;
+    the file's stat signature is revalidated per call.
+    """
+    ensure_driver_open()
+    entry = _acquire_handle(path)
+    try:
+        return cufile.read(entry.handle, dev_ptr, size, file_offset, 0)
+    finally:
+        _release_handle(entry)
 
 
 def read_into_many(
@@ -167,14 +281,14 @@ def read_into_many(
     *,
     max_workers: int | None = None,
 ) -> list[int]:
-    """Batched cuFile reads with pre-registered handles + threaded dispatch.
+    """Batched cuFile reads with cached registered handles + threaded dispatch.
 
     Per-chunk profiling showed ~3 ms of fixed overhead per call to
-    :func:`read_into` (open + handle_register + read + handle_deregister
-    + close).  For multi-chunk reads the register/deregister fraction
-    dominates.  This entry point pays the per-fd setup costs up front,
-    issues all the actual reads in parallel via a threadpool, then tears
-    everything down in one pass.
+    :func:`read_into` before handle caching (open + handle_register +
+    read + handle_deregister + close).  This entry point acquires every
+    handle up front from the process-wide cache (repeat reads and
+    same-file requests within one batch pay the open+register cost only
+    once), then issues all reads in parallel via a threadpool.
 
     Parameters
     ----------
@@ -197,28 +311,18 @@ def read_into_many(
     ensure_driver_open()
 
     n = len(requests)
-    fds: list[int | None] = [None] * n
-    handles: list[object | None] = [None] * n
-    descrs: list[object | None] = [None] * n
+    entries: list[_CachedHandle | None] = [None] * n
 
     try:
-        # Phase 1: serial open + register.  Tried parallelising this with
-        # a ThreadPoolExecutor — on Bruno's VAST NFS it regressed
+        # Phase 1: serial handle acquisition.  Tried parallelising this
+        # with a ThreadPoolExecutor — on Bruno's VAST NFS it regressed
         # (cufile.handle_register holds a driver-level lock; threads just
-        # added scheduling overhead).  Keep serial; the real speedup
-        # source is the parallel-read phase.
+        # added scheduling overhead).  Cache hits make it near-free; the
+        # real speedup source is the parallel-read phase.
         for i, (path, _dev_ptr, size, _offset) in enumerate(requests):
             if size == 0:
                 continue
-            fd = os.open(os.fspath(path), os.O_RDONLY)
-            descr = cufile.Descr()
-            s = _CUfileDescr.from_address(int(descr))
-            s.type = int(cufile.FileHandleType.OPAQUE_FD)
-            s.handle.fd = fd
-            s.fs_ops = 0
-            handles[i] = cufile.handle_register(int(descr))
-            fds[i] = fd
-            descrs[i] = descr
+            entries[i] = _acquire_handle(path)
 
         # Phase 2: parallel reads.  cuFile read internally releases the
         # GIL during the syscall, so this scales with thread count up to
@@ -227,10 +331,10 @@ def read_into_many(
 
         def _do_read(i: int) -> int:
             _path, dev_ptr, size, file_offset = requests[i]
-            h = handles[i]
-            if size == 0 or h is None:
+            entry = entries[i]
+            if size == 0 or entry is None:
                 return 0
-            return cufile.read(h, dev_ptr, size, file_offset, 0)
+            return cufile.read(entry.handle, dev_ptr, size, file_offset, 0)
 
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             for i, r in zip(range(n), ex.map(_do_read, range(n)), strict=True):
@@ -238,21 +342,9 @@ def read_into_many(
 
         return results
     finally:
-        # Phase 3: deregister + close everything we touched.
-        for h in handles:
-            if h is None:
-                continue
-            try:
-                cufile.handle_deregister(h)
-            except cufile.cuFileError:
-                pass
-        for fd in fds:
-            if fd is None:
-                continue
-            try:
-                os.close(fd)
-            except OSError:
-                pass
+        for entry in entries:
+            if entry is not None:
+                _release_handle(entry)
 
 
 def write_from(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:
