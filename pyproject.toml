@@ -42,6 +42,10 @@ optional-dependencies.cu12 = [
   "nvidia-cuda-runtime-cu12>=12.9.79",
   "nvidia-nvcomp-cu12>=5.1.0.21",
   "rmm-cu12>=26",
+  # Nsight Compute kernel-metrics driver (czarr-bench --ncu). Pulls nvtx +
+  # nvidia-ml-py (pynvml) used by the bench telemetry layer. Needs `ncu` on
+  # PATH (bundled with the cuda module) only for the --ncu metrics mode.
+  "nsight-python[cu12]>=0.9.6",
 ]
 optional-dependencies.cu13 = [
   "cuda-core>=1.0",
@@ -51,6 +55,12 @@ optional-dependencies.cu13 = [
   "nvidia-cuda-runtime-cu13",
   "nvidia-nvcomp-cu13>=5.1.0.21",
   "rmm-cu13>=26",
+  "nsight-python[cu13]>=0.9.6",
+]
+# czarr-bench CLI infra (CUDA-agnostic). Nsight/telemetry deps ride the
+# cu12/cu13 extras; this just adds the typer front-end.
+optional-dependencies.bench = [
+  "typer>=0.12",
 ]
 # https://docs.pypi.org/project_metadata/#project-urls
 urls.Documentation = "https://czarr.readthedocs.io/"
@@ -71,6 +81,11 @@ urls.Source = "https://github.com/srivarra/czarr"
 
 [project.entry-points."zarr.codec_pipeline"]
 "czarr.pipeline" = "czarr.pipeline.pipeline:CzarrPipeline"
+
+# Unified benchmark CLI. Needs the `bench` extra (typer) installed; the
+# Nsight/telemetry deps ride along with the cu12/cu13 extra.
+[project.scripts]
+czarr-bench = "czarr.bench.cli:app"
 
 
 [dependency-groups]
@@ -195,6 +210,9 @@ lint.ignore = [
 ]
 lint.per-file-ignores."*/__init__.py" = [ "F401" ]
 lint.per-file-ignores."bench/*" = [ "BLE001", "C408", "D", "E402", "E702", "F841" ]
+# The bench harness degrades gracefully when optional tooling (NVML, RMM stats,
+# Nsight, ncu) is missing — broad excepts there are deliberate, not sloppy.
+lint.per-file-ignores."src/czarr/bench/**" = [ "BLE001" ]
 lint.per-file-ignores."docs/*" = [ "I" ]
 lint.per-file-ignores."tests/*" = [ "D" ]
 lint.pydocstyle.convention = "numpy"

@@ -40,3 +40,9 @@ cufile.log
 # One-off spike/experiment scripts under bench/.  Real benchmarks land
 # in bench/baseline.py and the upcoming Phase 6 suite.
 bench/spike_*.py
+
+# czarr-bench: keep the trackable result rows (*.jsonl), drop the regenerable
+# store fixtures and any in-tree nsys/ncu captures.
+bench/results/fixtures/
+bench/results/nsys_*
+bench/results/*.ncu-rep

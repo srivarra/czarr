@@ -21,9 +21,20 @@ hostname
 nvidia-smi --query-gpu=name --format=csv,noheader
 echo
 
-# /local/scratch is the node-local NVMe — best surface for cuFile.
-SHARD=$(mktemp -p /local/scratch -d)/shard.bin
-trap 'rm -rf "$(dirname "$SHARD")"' EXIT
+# Prefer node-local NVMe scratch when present (best for cuFile);
+# fall back to repo-local logs dir.  Failing mktemp must error LOUDLY
+# — empty $SHARD silently becomes "/shard.bin" in the first version
+# of this script and writes failed with EACCES.
+SCRATCH_BASE=/local/scratch/users/$USER
+mkdir -p "$SCRATCH_BASE" 2>/dev/null || true
+if [ ! -w "$SCRATCH_BASE" ]; then
+  SCRATCH_BASE="$REPO/bench/logs"
+fi
+SHARD_DIR=$(mktemp -p "$SCRATCH_BASE" -d) || { echo "mktemp failed in $SCRATCH_BASE" >&2; exit 1; }
+SHARD="$SHARD_DIR/shard.bin"
+echo "scratch base: $SCRATCH_BASE"
+echo "shard path:   $SHARD"
+trap 'rm -rf "$SHARD_DIR"' EXIT
 
 UV_ARGS="--extra cu12"
 
