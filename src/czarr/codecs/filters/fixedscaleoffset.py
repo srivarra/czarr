@@ -40,6 +40,7 @@ from zarr.core.buffer import NDBuffer
 from zarr.core.common import JSON
 
 from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
+from czarr.codecs.base import codec_config
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,4 @@ class FixedScaleOffset(ArrayArrayCodec):
 
         Tolerant of writers that leak ``backend`` into the configuration.
         """
-        cfg = dict(data.get("configuration", {k: v for k, v in data.items() if k != "name"}))
-        cfg.pop("backend", None)
-        return cls(**cfg)
+        return cls(**codec_config(data, drop=("backend",)))

@@ -26,6 +26,8 @@ from zarr.core.array_spec import ArraySpec
 from zarr.core.buffer import NDBuffer
 from zarr.core.common import JSON
 
+from czarr.codecs.base import codec_config
+
 # Mantissa bit-width per float dtype.
 _MANTISSA_BITS = {
     cp.dtype("float16"): 10,
@@ -76,7 +78,7 @@ class BitRound(ArrayArrayCodec):
         out = _bitround_even(x, shift)
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(out.reshape(chunk_spec.shape))
 
-    def compute_encoded_size(self, input_byte_length: int, _chunk_spec: ArraySpec) -> int:
+    def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Encoded size equals input — only mantissa bits change."""
         return input_byte_length
 
@@ -90,14 +92,13 @@ class BitRound(ArrayArrayCodec):
     @classmethod
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
-        cfg = data.get("configuration", {k: v for k, v in data.items() if k != "name"})
-        return cls(**cfg)
+        return cls(**codec_config(data))
 
 
 # Fused banker's-rounding kernel — one launch per chunk regardless of
 # dtype.  The naive composed-cupy version dispatches ~10 separate
 # elementwise kernels (mask + shift + cmp + cmp + and + or + and + add)
-# and is 2.3× slower than the (incorrect) legacy add-half code on H100
+# and is 2.3x slower than the (incorrect) legacy add-half code on H100
 # 16 MiB f32.  Fusing collapses everything into one device pass.
 _BITROUND_EVEN_KERNEL = cp.ElementwiseKernel(
     in_params="T bits, uint64 shift, T half, T low_mask, T lsb_step",

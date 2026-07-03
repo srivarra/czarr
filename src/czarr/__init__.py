@@ -131,7 +131,7 @@ def configure_gpu(
         codec warmup that smaller batches keep paying.  Set to a finite
         value (8, 16, 32) only if profiling shows you can amortise that
         cost; see ``bench/overlap/sweep_h200`` for evidence that the
-        naive microbatch knob alone regresses 4-15×.
+        naive microbatch knob alone regresses 4-15x.
     async_concurrency:
         Parallel ``store.get`` calls inside a batch.  Default 32.
     rmm_pool_gb:
@@ -199,20 +199,20 @@ def configure_gpu(
 
 __all__ = [
     "ANS",
-    "Bitcomp",
+    "LZ4",
     "BitRound",
+    "Bitcomp",
     "Blosc",
     "Cascaded",
     "Checksum",
     "CudaBytesBytesCodec",
     "CudaZarrArray",
-    "Delta",
     "Deflate",
+    "Delta",
     "FixedScaleOffset",
     "GDeflate",
     "GPULocalStore",
     "Gzip",
-    "LZ4",
     "Shuffle",
     "Snappy",
     "Zlib",

@@ -24,6 +24,7 @@ import ctypes
 import struct
 from dataclasses import dataclass
 from functools import cache
+from typing import ClassVar
 
 import cupy as cp
 import numpy as np
@@ -39,17 +40,17 @@ _MAX_CHUNKS_PER_CALL = 8
 
 
 class _ZstdDecompressOpts(ctypes.Structure):
-    _fields_ = [("backend", ctypes.c_int), ("reserved", ctypes.c_char * 60)]  # 64 bytes
+    _fields_: ClassVar = [("backend", ctypes.c_int), ("reserved", ctypes.c_char * 60)]  # 64 bytes
 
 
 @cache
 def _lib() -> ctypes.CDLL:
     """Load libnvcomp.so from the installed wheel and bind the native zstd API."""
     import importlib
-    import os
+    from pathlib import Path
 
     mod = importlib.import_module("nvidia.libnvcomp")  # namespace pkg — import_module binds it
-    so = os.path.join(os.path.dirname(mod.__file__), "lib64", "libnvcomp.so.5")
+    so = str(Path(mod.__file__).parent / "lib64" / "libnvcomp.so.5")
     lib = ctypes.CDLL(so)
     lib.nvcompBatchedZstdDecompressGetTempSizeAsync.restype = ctypes.c_int
     lib.nvcompBatchedZstdDecompressGetTempSizeAsync.argtypes = [

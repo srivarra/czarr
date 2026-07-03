@@ -17,7 +17,7 @@ from typing import ClassVar, Self
 
 from zarr.core.common import JSON
 
-from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind
+from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind, codec_config
 
 
 @dataclass(frozen=True)
@@ -53,5 +53,4 @@ class LZ4(CudaBytesBytesCodec):
     @classmethod
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata."""
-        cfg = dict(data.get("configuration", {}))
-        return cls(**cfg)
+        return cls(**codec_config(data))

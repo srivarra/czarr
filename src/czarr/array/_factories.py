@@ -53,7 +53,7 @@ def open_cuda_array(
     backend.
     """
     resolved = _resolve_store(store, mode=mode)
-    arr = zarr.open_array(store=resolved, path=path, mode=mode)
+    arr = zarr.open_array(store=resolved, path=path or "", mode=mode)
     return CudaZarrArray.wrap(arr)
 
 

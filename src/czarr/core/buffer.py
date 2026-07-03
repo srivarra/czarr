@@ -104,8 +104,7 @@ class CzarrGpuBuffer(core.Buffer):
     def combine(self, others: Iterable[core.Buffer]) -> Self:
         """Concatenate self + ``others`` into a fresh aligned device buffer."""
         parts = [self._data]
-        for other in others:
-            parts.append(cp.asarray(other.as_array_like()).view(cp.uint8))
+        parts.extend(cp.asarray(other.as_array_like()).view(cp.uint8) for other in others)
         total = int(sum(p.size for p in parts))
         out = type(self).empty(total)
         offset = 0

@@ -31,13 +31,13 @@ from czarr.codecs.compressors.zstd import Zstd
 
 __all__ = [
     "ANS",
+    "LZ4",
     "Bitcomp",
     "Blosc",
     "Cascaded",
     "Deflate",
     "GDeflate",
     "Gzip",
-    "LZ4",
     "Snappy",
     "Zlib",
     "Zstd",

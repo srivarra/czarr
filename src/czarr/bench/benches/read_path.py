@@ -17,6 +17,7 @@ is recorded per row.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import cupy as cp
 import cupyx
@@ -50,7 +51,7 @@ def _threaded_readinto(paths: list[str], host, offsets: list[int], sizes: list[i
     mv = memoryview(host)
 
     def rd(i: int) -> None:
-        with open(paths[i], "rb", buffering=0) as fh:
+        with Path(paths[i]).open("rb", buffering=0) as fh:
             fh.readinto(mv[offsets[i] : offsets[i] + sizes[i]])
 
     with ThreadPoolExecutor(max_workers=min(32, len(paths))) as ex:

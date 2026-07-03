@@ -62,7 +62,7 @@ class TestDeltaBackend:
 
     def test_override_unsupported_raises(self) -> None:
         set_backend_overrides({"delta": "native"})
-        with pytest.raises(ValueError, match="codec_backend_overrides.*delta.*native"):
+        with pytest.raises(ValueError, match=r"codec_backend_overrides.*delta.*native"):
             czarr.Delta(dtype="<i4")
 
 

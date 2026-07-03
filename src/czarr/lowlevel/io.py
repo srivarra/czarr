@@ -13,6 +13,8 @@ works on compat-hostile nodes.  Store data must live on a real
 filesystem — cuFile cannot read tmpfs (/tmp), see the Bruno notes.
 """
 
+from pathlib import Path
+
 import cupy as cp
 import numpy as np
 from cuda.bindings.cufile import cuFileError
@@ -61,7 +63,7 @@ def read(requests: list[ReadRequest], *, max_workers: int | None = None) -> list
 def _host_read_into(request: ReadRequest, dev: cp.ndarray) -> int:
     """Host-I/O fallback: pread into pageable host memory, then H2D."""
     host = np.empty(request.nbytes, dtype=np.uint8)
-    with open(request.path, "rb") as f:
+    with Path(request.path).open("rb") as f:
         f.seek(request.offset)
         n = f.readinto(memoryview(host))
     dev[:n].set(host[:n])

@@ -371,7 +371,8 @@ def test_get_stream_probes_internal_when_default():
     codec = LZ4()
     handle1 = codec.get_stream()
     handle2 = codec.get_stream()
-    assert isinstance(handle1, int) and handle1 != 0
+    assert isinstance(handle1, int)
+    assert handle1 != 0
     assert handle1 == handle2  # cached
     # Different codec instances should generally yield different streams,
     # but the bigger guarantee here is that the value is stable per instance

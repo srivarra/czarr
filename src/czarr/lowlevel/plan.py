@@ -251,7 +251,7 @@ class DecodePlan:
 
 
 def _read_host(path: Path, offset: int, nbytes: int) -> bytes:
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         f.seek(offset)
         return f.read(nbytes)
 

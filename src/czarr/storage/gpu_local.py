@@ -1,7 +1,6 @@
 """GPU-aware local-filesystem store: cuFile reads/writes when prototype is GPU."""
 
 import asyncio
-import os
 from pathlib import Path
 
 import cupy as cp
@@ -37,7 +36,7 @@ def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteReques
     ``CzarrGpuBuffer.empty`` (VMR-aligned + pre-registered with cuFile)
     but VMR's per-allocation cost (cuMemCreate / cuMemAddressReserve /
     cuMemMap + 2 MiB granularity) dominates at ~5 ms per chunk — net
-    5× regression on the H200 slice_compare workload.  The
+    5x regression on the H200 slice_compare workload.  The
     register-once architecture only pays off with a pre-allocated
     buffer pool (callers reuse one big registered slab across many
     reads); without that pool the VMR allocation cost outweighs the
@@ -47,7 +46,7 @@ def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteReques
     deleted; see git history.
     """
     try:
-        st = os.stat(path)
+        st = path.stat()
     except FileNotFoundError:
         return None
     offset, size = _resolve_byte_range(byte_range, st.st_size)

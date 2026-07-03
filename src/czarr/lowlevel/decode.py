@@ -47,7 +47,7 @@ def _nvcomp_codec(algorithm: str) -> nvcomp.Codec:
 class _Chain:
     """The decode recipe distilled from a raw v3 codec list."""
 
-    __slots__ = ("compressor", "shuffle_elementsize", "crc32c_trailer")
+    __slots__ = ("compressor", "crc32c_trailer", "shuffle_elementsize")
 
     def __init__(self, codecs: tuple[dict[str, Any], ...], dtype: np.dtype) -> None:
         self.compressor: str | None = None

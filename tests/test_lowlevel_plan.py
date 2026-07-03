@@ -4,6 +4,8 @@ Host-only: fixture stores are written with zarr-python (CPU path), and
 plan.py itself never imports cupy.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import zarr
@@ -211,7 +213,7 @@ class TestShardedRanges:
         # Slicing the fused window at (intra_offset, length) must equal the
         # bytes at the index-recorded absolute offset.
         for r in reqs:
-            with open(r.path, "rb") as f:
+            with Path(r.path).open("rb") as f:
                 f.seek(r.offset)
                 window = f.read(r.nbytes)
             index = plan._shard_index((0, 0), r.path, None)
@@ -219,7 +221,7 @@ class TestShardedRanges:
                 within = (coords[0] % 2, coords[1] % 2)
                 abs_offset, abs_len = (int(x) for x in index[within])
                 assert abs_len == length
-                assert window[intra : intra + length] == open(r.path, "rb").read()[abs_offset : abs_offset + length]
+                assert window[intra : intra + length] == Path(r.path).read_bytes()[abs_offset : abs_offset + length]
 
     def test_partial_shard_missing_inner_chunks_omitted(self, sharded_store) -> None:
         root, _ = sharded_store

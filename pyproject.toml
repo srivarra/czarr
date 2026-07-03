@@ -165,6 +165,23 @@ librmm-cu13 = { index = "nvidia" }
 # Mark cu12/cu13 as mutually-exclusive so uv can resolve each extra
 # independently (otherwise uv tries to satisfy both at once and fails).
 
+[tool.ty.src]
+# Type-check the library only; tests/bench are held to ruff's lighter standard.
+include = [ "src" ]
+
+[tool.ty.rules]
+# The pre-commit hook (`uv check`) fails on warnings too, so anything below
+# is fully off.  Two buckets:
+# Compiled GPU libs (nvidia.nvcomp, cuda.bindings, cuda.compute) ship no stubs
+# — permanent.
+unresolved-attribute = "ignore"
+unresolved-import = "ignore"
+possibly-missing-submodule = "ignore"
+# czarr's frozen-dataclass codecs correctly declare `is_fixed_size` as
+# ClassVar; zarr's BaseCodec annotates it as an instance var, so ty flags
+# every subclass.  Upstream typing quirk — not fixable here.
+invalid-attribute-override = "ignore"
+
 [tool.ruff]
 line-length = 120
 src = [ "src" ]
@@ -176,17 +193,22 @@ extend-exclude = [ ".planning" ]
 format.docstring-code-format = true
 
 lint.select = [
-  "B",      # flake8-bugbear
-  "BLE",    # flake8-blind-except
-  "C4",     # flake8-comprehensions
-  "D",      # pydocstyle
-  "E",      # Error detected by Pycodestyle
-  "F",      # Errors detected by Pyflakes
-  "I",      # isort
-  "RUF100", # Report unused noqa directives
-  "TID",    # flake8-tidy-imports
-  "UP",     # pyupgrade
-  "W",      # Warning detected by Pycodestyle
+  "B",    # flake8-bugbear
+  "BLE",  # flake8-blind-except
+  "C4",   # flake8-comprehensions
+  "D",    # pydocstyle
+  "E",    # Error detected by Pycodestyle
+  "F",    # Errors detected by Pyflakes
+  "I",    # isort
+  "NPY",  # NumPy-specific rules
+  "PD",   # Pandas code
+  "PERF", # Perflint
+  "PT",   # Pytest
+  "PTH",  # pathlib
+  "RUF",  # Ruff-specific rules
+  "TID",  # flake8-tidy-imports
+  "UP",   # pyupgrade
+  "W",    # Warning detected by Pycodestyle
 ]
 lint.ignore = [
   "B008", # Errors from function calls in argument defaults. These are fine when the result is immutable.
@@ -204,7 +226,7 @@ lint.ignore = [
   "E741", # allow I, O, l as variable names -> I is the identity matrix
 ]
 lint.per-file-ignores."*/__init__.py" = [ "F401" ]
-lint.per-file-ignores."bench/*" = [ "BLE001", "C408", "D", "E402", "E702", "F841" ]
+lint.per-file-ignores."bench/*" = [ "BLE001", "C408", "D", "E402", "E702", "F841", "PERF", "PTH", "RUF001", "RUF002", "RUF003" ]
 # The bench harness degrades gracefully when optional tooling (NVML, RMM stats,
 # Nsight, ncu) is missing — broad excepts there are deliberate, not sloppy.
 lint.per-file-ignores."src/czarr/bench/**" = [ "BLE001" ]

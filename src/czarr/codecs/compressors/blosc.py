@@ -22,7 +22,7 @@ from zarr.core.buffer import Buffer
 from zarr.core.common import JSON
 
 from czarr.codecs._nvcomp_buffer import device_to_buffer
-from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind
+from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind, codec_config
 from czarr.core.buffer import is_gpu_buffer
 
 
@@ -95,7 +95,7 @@ class Blosc(CudaBytesBytesCodec):
     @classmethod
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Build from a zarr-v3 BloscCodec metadata dict (tolerant of missing keys)."""
-        cfg = dict(data.get("configuration", {})) if isinstance(data, dict) else {}
+        cfg = codec_config(data)
         return cls(
             cname=str(cfg.get("cname", "zstd")),
             clevel=int(cfg.get("clevel", 5)),

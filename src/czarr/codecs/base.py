@@ -38,6 +38,21 @@ from czarr.codecs._nvcomp_buffer import buffer_to_nvarray, device_to_buffer, nva
 from czarr.core.buffer import is_gpu_buffer
 
 
+def codec_config(data: dict[str, JSON], *, drop: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Extract the ``configuration`` mapping from v3 codec metadata.
+
+    Falls back to the flat top-level form (every key but ``name``) for
+    writers that inline the config.  ``drop`` strips tolerated foreign
+    keys (e.g. a ``backend`` leaked by another writer).  Raises
+    ``TypeError`` when the configuration is not a mapping — metadata is
+    a trust boundary, malformed input should fail loudly.
+    """
+    raw = data.get("configuration", {k: v for k, v in data.items() if k != "name"})
+    if not isinstance(raw, dict):
+        raise TypeError(f"codec configuration must be a mapping, got {type(raw).__name__}")
+    return {str(k): v for k, v in raw.items() if k not in drop}
+
+
 class _Algorithm(StrEnum):
     """nvCOMP algorithm names — private; users pick a CudaBytesBytesCodec subclass instead."""
 
@@ -327,7 +342,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
         items = list(chunks_and_specs)
         return await asyncio.to_thread(self._batch_sync, items, "decode")
 
-    def compute_encoded_size(self, _input_byte_length: int, _chunk_spec: ArraySpec) -> int:
+    def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Encoded size is data-dependent for compressors; raise to signal unknown."""
         raise NotImplementedError
 
@@ -350,9 +365,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
     @classmethod
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct a codec from its ``to_dict`` payload (tolerant of CPU schemas)."""
-        raw = data.get("configuration", {})
-        if not isinstance(raw, dict):
-            raise TypeError(f"codec configuration must be a mapping, got {type(raw).__name__}")
+        raw = codec_config(data)
         # Accept CPU-codec config schemas (e.g. zarr's ZstdCodec has
         # {"level", "checksum"}; we ignore them since nvCOMP picks its own).
         valid = {f.name for f in fields(cls)}

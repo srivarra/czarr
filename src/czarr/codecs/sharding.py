@@ -12,10 +12,10 @@ reads — then slices per-chunk Buffer views out locally.
 
 Microbench on H100 (``bench/storage/coalesce_compare.py``):
 
-* 32 × 64 KiB chunks   → 22.2x faster (26.5 ms → 1.20 ms)
-* 32 × 256 KiB chunks  → 17.7x
-* 32 × 1 MiB chunks    →  6.6x
-* 8 × 4 MiB chunks     →  2.3x
+* 32 x 64 KiB chunks   → 22.2x faster (26.5 ms → 1.20 ms)
+* 32 x 256 KiB chunks  → 17.7x
+* 32 x 1 MiB chunks    →  6.6x
+* 8 x 4 MiB chunks     →  2.3x
 
 The coalesce params (``max_fused_bytes`` / ``max_gap_bytes``) are
 runtime knobs — not persisted in metadata.  The on-disk name stays
@@ -171,8 +171,9 @@ class CzarrShardingCodec(ShardingCodec):
             out,
         )
 
-        if hasattr(indexer, "sel_shape"):
-            return out.reshape(indexer.sel_shape)
+        sel_shape = getattr(indexer, "sel_shape", None)
+        if sel_shape is not None:
+            return out.reshape(tuple(sel_shape))
         return out
 
     async def _coalesced_chunk_fetch(

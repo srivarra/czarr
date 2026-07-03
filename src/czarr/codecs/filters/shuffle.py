@@ -24,6 +24,7 @@ from zarr.core.buffer import Buffer
 from zarr.core.common import JSON
 
 from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
+from czarr.codecs.base import codec_config
 from czarr.kernels.byteshuffle import byteshuffle, byteunshuffle
 
 
@@ -69,7 +70,7 @@ class Shuffle(BytesBytesCodec):
         out = byteshuffle(cp_arr, self.elementsize, cp_arr.size)
         return chunk_spec.prototype.buffer.from_array_like(out)
 
-    def compute_encoded_size(self, input_byte_length: int, _chunk_spec: ArraySpec) -> int:
+    def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Shuffle is a permutation — same size in and out."""
         return input_byte_length
 
@@ -90,6 +91,4 @@ class Shuffle(BytesBytesCodec):
 
         Tolerant of writers that leak ``backend`` into the configuration.
         """
-        cfg = dict(data.get("configuration", {k: v for k, v in data.items() if k != "name"}))
-        cfg.pop("backend", None)
-        return cls(**cfg)
+        return cls(**codec_config(data, drop=("backend",)))

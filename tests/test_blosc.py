@@ -1,8 +1,8 @@
 """GPU blosc decode (czarr.codecs.compressors.Blosc) — native nvCOMP batched path."""
 
-import os
 import struct
 import tempfile
+from pathlib import Path
 
 import cupy as cp
 import numpy as np
@@ -64,13 +64,13 @@ def test_blosc_encode_rejected():
         asyncio.run(czarr.Blosc().encode([]))
 
 
-@pytest.mark.skipif(not os.path.exists(_REAL_CHUNK), reason="waveorder dataset not present")
+@pytest.mark.skipif(not Path(_REAL_CHUNK).exists(), reason="waveorder dataset not present")
 def test_engine_real_chunk_bit_exact():
     """The native engine decodes a real 256 MiB / 8192-block chunk bit-exact."""
     from czarr.lowlevel.blosc import decode_blosc_batch
 
-    buf = open(_REAL_CHUNK, "rb").read()
-    nbytes, blocksize, _ = struct.unpack_from("<iii", buf, 4)
+    buf = Path(_REAL_CHUNK).read_bytes()
+    nbytes, _blocksize, _ = struct.unpack_from("<iii", buf, 4)
     comp = cp.asarray(np.frombuffer(buf, dtype=np.uint8))
     (decoded,) = decode_blosc_batch([comp])
     truth = np.frombuffer(NumcodecsBlosc().decode(buf), dtype=np.uint8)
@@ -78,15 +78,13 @@ def test_engine_real_chunk_bit_exact():
     np.testing.assert_array_equal(cp.asnumpy(decoded), truth)
 
 
-@pytest.mark.skipif(not os.path.exists(_REAL_CHUNK), reason="waveorder dataset not present")
+@pytest.mark.skipif(not Path(_REAL_CHUNK).exists(), reason="waveorder dataset not present")
 def test_engine_multichunk_batch():
     """Cross-chunk batched decode stays bit-exact across several real chunks."""
-    import glob
-
     from czarr.lowlevel.blosc import decode_blosc_batch
 
-    files = sorted(glob.glob(os.path.dirname(_REAL_CHUNK) + "/*"))[:4]
-    bufs = [open(f, "rb").read() for f in files]
+    files = sorted(Path(_REAL_CHUNK).parent.glob("*"))[:4]
+    bufs = [f.read_bytes() for f in files]
     comps = [cp.asarray(np.frombuffer(b, dtype=np.uint8)) for b in bufs]
     decoded = decode_blosc_batch(comps)
     for dev, buf in zip(decoded, bufs, strict=True):

@@ -11,7 +11,7 @@ import zarr
 # without nvidia_fs so cuFile-dependent tests still run on tmpfs-free
 # real-disk paths.  When nvidia_fs IS loaded we want real GDS — the
 # async path requires it and silently corrupts under forced compat.
-if not os.path.exists("/proc/driver/nvidia-fs"):
+if not Path("/proc/driver/nvidia-fs").exists():
     os.environ.setdefault("CUFILE_FORCE_COMPAT_MODE", "true")
 
 # pytest's default tmp_path is on /tmp (tmpfs on many hosts), which

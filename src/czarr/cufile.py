@@ -163,7 +163,7 @@ def read_into(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:
 
 
 def read_into_many(
-    requests: list[tuple[object, int, int, int]],
+    requests: list[tuple[str | os.PathLike[str], int, int, int]],
     *,
     max_workers: int | None = None,
 ) -> list[int]:
