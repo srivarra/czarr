@@ -1,18 +1,17 @@
-"""``cuda.core.Buffer``-backed Zarr buffers.
+"""cupy-backed Zarr buffers registered as an opt-in prototype.
 
 `CzarrGpuBuffer` and `CzarrGpuNDBuffer` are drop-in replacements for
-``zarr.core.buffer.gpu.Buffer`` / ``...gpu.NDBuffer`` that allocate
-device memory through ``cuda.core``'s
-``VirtualMemoryResource(addr_align=4096, gpu_direct_rdma=True)`` so the
-underlying device pointer is 4 KiB-aligned and tagged GPU-direct-RDMA.
-That is exactly what cuFile direct I/O wants, and it gives us a clean
-substrate for Phase 3 (register-once cuFile).
+``zarr.core.buffer.gpu.Buffer`` / ``...gpu.NDBuffer``.  They are
+registered with zarr's registry at import but NOT wired by default —
+``configure_gpu`` selects zarr's stock gpu buffers; opt in via
+``zarr.config.set({"buffer": "czarr.core.buffer.CzarrGpuBuffer", ...})``.
 
-The wrapper holds a ``cupy.ndarray`` view that was imported zero-copy
-from the producer via DLPack. cupy's DLPack import takes a reference to
-the producer's deleter, so the lifetime of the underlying
-``cuda.core.Buffer`` follows the cupy view automatically — we never
-call ``close()`` directly, which keeps slicing safe.
+History: these classes previously allocated through ``cuda.core``'s
+``VirtualMemoryResource`` (4 KiB-aligned, GPU-direct-RDMA-tagged) with a
+register-once ``CuFileSlabPool`` on top.  That architecture was benched
+~5% SLOWER than stock cupy allocation on real GDS (H100/H200), so the
+slab pool and VMR allocator were deleted — git history has both if a
+register-once retry ever becomes evidence-backed.
 
 ``__cuda_array_interface__`` is synthesised on the wrapper so nvCOMP /
 Zarr code that consumes CAI can wrap the buffer zero-copy without going
@@ -26,11 +25,6 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import cupy as cp
 import numpy as np
 import numpy.typing as npt
-from cuda.core import (
-    Device,
-    VirtualMemoryResource,
-    VirtualMemoryResourceOptions,
-)
 from zarr.core.buffer import core
 from zarr.core.buffer import gpu as gpu_buffer
 from zarr.core.buffer.core import ArrayLike, BufferPrototype, NDArrayLike
@@ -40,49 +34,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import Self
 
-    from cuda.core import Stream
     from zarr.core.common import BytesLike
 
 
-_DEVICE_MR: VirtualMemoryResource | None = None
-
-
-def _device_mr() -> VirtualMemoryResource:
-    """Lazy singleton for the 4 KiB-aligned device allocator.
-
-    ``VirtualMemoryResource`` is the only ``cuda.core`` allocator that
-    delivers a fresh 4 KiB-aligned virtual address per call (verified
-    in ``bench/buffer/alignment_probe.py``). The cost is granularity:
-    every allocation pads up to the device's VMM granularity (commonly
-    2 MiB on Hopper / Ampere), so per-call allocation is expensive —
-    :class:`czarr.core.slab.CuFileSlabPool` sub-allocates from a few
-    pre-registered slabs on top of this, which is what
-    ``CzarrGpuBuffer.empty`` uses.
-    """
-    global _DEVICE_MR
-    if _DEVICE_MR is None:
-        dev = Device()
-        dev.set_current()
-        _DEVICE_MR = VirtualMemoryResource(
-            dev,
-            VirtualMemoryResourceOptions(addr_align=4096, gpu_direct_rdma=True),
-        )
-    return _DEVICE_MR
-
-
-def _current_stream() -> Stream:
-    return Device().default_stream
-
-
 class CzarrGpuBuffer(core.Buffer):
-    """A flat byte buffer backed by a ``cuda.core.Buffer``.
-
-    For freshly-allocated buffers the underlying device pointer is
-    4 KiB-aligned and tagged GPU-direct-RDMA. Slices and combined
-    buffers share or copy from those allocations and are not
-    necessarily aligned themselves; check ``device_ptr % 4096`` if you
-    plan to feed a slice to cuFile.
-    """
+    """A flat byte buffer over device memory (cupy-backed)."""
 
     def __init__(self, array_like: ArrayLike) -> None:
         # The ABC requires us to accept a 1-D byte array_like. We honour
@@ -96,45 +52,24 @@ class CzarrGpuBuffer(core.Buffer):
             raise ValueError(f"CzarrGpuBuffer: only byte dtype allowed, got {arr.dtype}")
         # Always present as uint8 so downstream code sees one dtype.
         self._data: cp.ndarray = arr.view(cp.uint8)
-        # Set by :meth:`empty` to the slab sub-region backing this buffer.
-        # Holding it keeps the region reserved; dropping the buffer
-        # returns the region to the slab free-list.  ``None`` for buffers
-        # that wrap external memory (``from_array_like``).  cuFile
-        # registration is owned by the slab, not the individual buffer.
-        self._slab_alloc: object | None = None
 
     # ------------------------------------------------------------------
     # construction
     # ------------------------------------------------------------------
 
     @classmethod
-    def empty(cls, size: int, *, stream: Stream | None = None) -> Self:
-        """Allocate a ``size``-byte buffer from the register-once slab pool.
+    def empty(cls, size: int) -> Self:
+        """Allocate a ``size``-byte device buffer via ``cp.empty``.
 
-        Sub-allocates a 4 KiB-aligned region from the process-global
-        :class:`czarr.core.slab.CuFileSlabPool`.  The slab — not this
-        buffer — owns the cuFile ``buf_register``, so allocation here is
-        a free-list pop with no per-chunk VMR ``cuMemCreate``/``cuMemMap``
-        and no per-chunk cuFile registration.  That is the fix for the
-        ~5x per-chunk regression the naive ``VirtualMemoryResource``
-        allocate-per-call path showed on the H200 slice_compare bench.
-
-        The returned buffer holds its :class:`SlabAllocation` alive; when
-        the buffer is GC'd the region returns to the slab's free-list for
-        reuse.  Slices via :meth:`__getitem__` share the region and keep
-        it pinned for their own lifetime (cupy view refcounting).
+        Same allocation path production uses (``GPULocalStore`` reads
+        into plain ``cp.empty``); cuFile registers pointers internally
+        on first use.
         """
         if size < 0:
             raise ValueError(f"size must be non-negative, got {size}")
         if size == 0:
             return cls.create_zero_length()
-        from czarr.core.slab import get_default_slab_pool
-
-        alloc = get_default_slab_pool().allocate(size, stream=stream)
-        instance = cls(alloc.array)
-        # Keep the sub-region reserved for this buffer's lifetime.
-        instance._slab_alloc = alloc
-        return instance
+        return cls(cp.empty(size, dtype=cp.uint8))
 
     @classmethod
     def create_zero_length(cls) -> Self:
@@ -143,13 +78,7 @@ class CzarrGpuBuffer(core.Buffer):
 
     @classmethod
     def from_array_like(cls, array_like: ArrayLike) -> Self:
-        """Wrap a CAI- or DLPack-compatible array zero-copy.
-
-        The 4 KiB-aligned + RDMA guarantee only holds for buffers
-        produced by :meth:`empty` / :meth:`from_bytes`. Callers that
-        need the alignment guarantee should allocate explicitly and
-        copy in; wrapping someone else's pointer keeps their alignment.
-        """
+        """Wrap a CAI- or DLPack-compatible array zero-copy."""
         src = cp.asarray(array_like).view(cp.uint8).ravel()
         return cls(src)
 
@@ -198,12 +127,7 @@ class CzarrGpuBuffer(core.Buffer):
 
     @property
     def device_ptr(self) -> int:
-        """Raw device pointer.
-
-        For buffers allocated via ``empty`` / ``from_bytes`` this is the
-        slab sub-region's 4 KiB-aligned pointer.  Slice-views inherit the
-        parent's pointer plus the slice offset.
-        """
+        """Raw device pointer; slice-views inherit the parent's pointer plus offset."""
         if self._data.size == 0:
             return 0
         return int(self._data.data.ptr)

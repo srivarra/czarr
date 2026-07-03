@@ -225,7 +225,7 @@ def write_from(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Buffer registration (register-once slab pool support)
+# Buffer registration (register-once reads in the bench harness)
 # ---------------------------------------------------------------------------
 
 

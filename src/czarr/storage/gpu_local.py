@@ -50,7 +50,9 @@ def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteReques
     buffer pool (callers reuse one big registered slab across many
     reads); without that pool the VMR allocation cost outweighs the
     cuFile-register savings (which are also negligible in compat-mode
-    cuFile on VAST/Lustre).  Tracked as a follow-up to v0.1.
+    cuFile on VAST/Lustre).  The slab-pool prototype built for that
+    architecture benched ~5% slower than stock cupy on real GDS and was
+    deleted; see git history.
     """
     try:
         st = os.stat(path)

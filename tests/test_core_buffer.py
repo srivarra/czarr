@@ -1,4 +1,4 @@
-"""Phase 1 tests for ``czarr.core.buffer.CzarrGpuBuffer``."""
+"""Tests for the opt-in ``czarr.core.buffer`` prototype classes."""
 
 from __future__ import annotations
 
@@ -17,21 +17,11 @@ from czarr.core.buffer import (
 # ----------------------------------------------------------------------
 
 
-def test_empty_buffer_is_4kib_aligned() -> None:
-    buf = CzarrGpuBuffer.empty(1024)
-    try:
-        assert buf.device_ptr != 0
-        assert buf.device_ptr % 4096 == 0
-        assert len(buf) == 1024
-    finally:
-        del buf
-
-
 @pytest.mark.parametrize("size", [1, 16, 4096, 1 << 20, 16 << 20])
-def test_alignment_across_sizes(size: int) -> None:
+def test_empty_allocates_device_bytes(size: int) -> None:
     buf = CzarrGpuBuffer.empty(size)
     try:
-        assert buf.device_ptr % 4096 == 0, f"size={size} ptr={hex(buf.device_ptr)}"
+        assert buf.device_ptr != 0
         assert len(buf) == size
     finally:
         del buf
@@ -60,7 +50,7 @@ def test_memory_class_flags() -> None:
 
 
 def test_cuda_array_interface_shape_matches_logical_size() -> None:
-    """CAI must expose ``size`` (not the rounded-up cuda.core size)."""
+    """CAI must expose the logical byte size."""
     buf = CzarrGpuBuffer.empty(1024)
     try:
         cai = buf.__cuda_array_interface__
@@ -91,10 +81,8 @@ def test_from_bytes_round_trip() -> None:
 def test_from_array_like_wraps_zero_copy() -> None:
     # ``from_array_like`` is the codec-decode path: it must wrap
     # without copying, so the resulting buffer shares the source's
-    # device pointer. Alignment is the caller's responsibility (and
-    # only ``empty`` / ``from_bytes`` guarantee 4 KiB on this class).
-    # Build on host then push to device to avoid cupy JIT (CUDA 13 vs
-    # CuPy cu12 nvrtc mismatch on the cluster).
+    # device pointer.  Build on host then push to device to avoid cupy
+    # JIT (CUDA 13 vs CuPy cu12 nvrtc mismatch on the cluster).
     src = cp.asarray(np.arange(1024, dtype=np.uint8))
     buf = CzarrGpuBuffer.from_array_like(src)
     try:
@@ -136,7 +124,6 @@ def test_combine_concatenates_payloads() -> None:
         combined = a.combine([b])
         try:
             assert combined.as_numpy_array().tobytes() == b"hello-world"
-            assert combined.device_ptr % 4096 == 0
             assert len(combined) == 11
         finally:
             del combined
