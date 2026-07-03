@@ -167,9 +167,11 @@ def _decode_subbatch(comps: list[cp.ndarray], stream: int) -> list[cp.ndarray]:
         if L.shuffle == "bit":
             bitunshuffle_into(scr, out, L.typesize, bs)
         elif L.shuffle == "byte":
-            from czarr.kernels.byteshuffle import byteunshuffle_batched
+            # cupy path, not kernels.byteshuffle: cuda-tile 1.3 fails to
+            # compile on sm_90, and H100/H200 are the real-GDS targets.
+            from czarr.codecs.filters.shuffle import _byteunshuffle_cupy
 
-            out = byteunshuffle_batched(scr, L.typesize, bs)[: L.nbytes]
+            out = _byteunshuffle_cupy(scr, L.typesize, bs)[: L.nbytes]
         else:  # none
             out = scr[: L.nbytes].copy()
         outs.append(out)

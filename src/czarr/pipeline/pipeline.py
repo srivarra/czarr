@@ -27,15 +27,17 @@ them via ``concurrent_map`` up to ``async.concurrency``.  Inside each
 batch, reads happen concurrently and decode runs after they all
 arrive.  Across batches, the decode of batch K runs concurrently with
 the reads of batch K+1.  So the lever for overlap is just ``batch_size``
-— ``configure_gpu(decode_batch_size=8)`` enables it by default.
+— the default is one bulk batch (no overlap; measured near-optimal on
+GDS), with ``configure_gpu(decode_batch_size=...)`` as the opt-in.
 
 The NVTX wrappers below make the overlap visible in nsys; the actual
 concurrency comes from zarr's pipeline machinery.
 
 Register globally via :func:`czarr.configure_gpu` (sets
-``codec_pipeline.path = "czarr.pipeline.CzarrPipeline"``).  Per-array
-opt-in is also supported by passing ``codec_pipeline=CzarrPipeline`` to
-``zarr.create_array`` / ``zarr.open``.
+``codec_pipeline.path = "czarr.pipeline.CzarrPipeline"``).  To scope it,
+use ``with czarr.configure_gpu(): ...`` or set
+``zarr.config.set({"codec_pipeline.path": "czarr.pipeline.CzarrPipeline"})``
+directly — zarr 3.x does not accept a ``codec_pipeline=`` kwarg per array.
 """
 
 from __future__ import annotations
