@@ -12,6 +12,9 @@ axis is retained (tier 1 squeezes axes on top for numpy semantics).
 """
 
 import json
+import os
+import threading
+from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from itertools import product
@@ -318,15 +321,52 @@ def normalize_selection(selection: Any, shape: tuple[int, ...]) -> tuple[tuple[i
 # metadata parse
 # ---------------------------------------------------------------------------
 
+# Process-wide plan LRU keyed by the array root.  Entries are revalidated
+# against zarr.json's stat signature (inode, mtime, size) on every hit, so
+# a rewritten array reparses; a hit shares the plan object — and with it
+# the parsed-shard-index cache — across Array instances and threads.
+# Caveat (same contract as holding one plan): rewriting *shard files*
+# without touching zarr.json leaves cached shard indexes stale; pass
+# ``cached=False`` when reading data that mutates under you.
+_PLAN_CACHE_CAP = 32
+_plan_cache: "OrderedDict[str, tuple[tuple[int, int, int], DecodePlan]]" = OrderedDict()
+_plan_cache_lock = threading.Lock()
 
-def open_plan(root: str | Path) -> DecodePlan:
+
+def clear_plan_cache() -> None:
+    """Drop every cached :class:`DecodePlan` (and its shard-index cache)."""
+    with _plan_cache_lock:
+        _plan_cache.clear()
+
+
+def open_plan(root: str | Path, *, cached: bool = True) -> DecodePlan:
     """Parse ``{root}/zarr.json`` into a reusable :class:`DecodePlan`.
 
-    One metadata read; no other I/O.  Zarr v3 arrays only.
+    One metadata read; no other I/O.  Zarr v3 arrays only.  With
+    ``cached=True`` (default) the plan is shared process-wide and only
+    reparsed when ``zarr.json`` changes on disk — repeat opens are a
+    ``stat`` call.  ``cached=False`` always builds a fresh plan.
     """
     root = Path(root)
-    metadata = json.loads((root / "zarr.json").read_bytes())
-    return plan_from_metadata(metadata, root)
+    zarr_json = root / "zarr.json"
+    if not cached:
+        return plan_from_metadata(json.loads(zarr_json.read_bytes()), root)
+
+    st = zarr_json.stat()
+    sig = (st.st_ino, st.st_mtime_ns, st.st_size)
+    key = os.fspath(root)
+    with _plan_cache_lock:
+        hit = _plan_cache.get(key)
+        if hit is not None and hit[0] == sig:
+            _plan_cache.move_to_end(key)
+            return hit[1]
+    plan = plan_from_metadata(json.loads(zarr_json.read_bytes()), root)
+    with _plan_cache_lock:
+        _plan_cache[key] = (sig, plan)
+        _plan_cache.move_to_end(key)
+        while len(_plan_cache) > _PLAN_CACHE_CAP:
+            _plan_cache.popitem(last=False)
+    return plan
 
 
 def plan_from_metadata(metadata: dict[str, Any], root: str | Path) -> DecodePlan:

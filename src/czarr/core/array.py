@@ -53,9 +53,15 @@ class Array:
     # ------------------------------------------------------------------
 
     @classmethod
-    def open(cls, root: str | Path) -> Self:
-        """Open the array at ``root`` — one ``zarr.json`` read, no other I/O."""
-        return cls(open_plan(root))
+    def open(cls, root: str | Path, *, cached: bool = True) -> Self:
+        """Open the array at ``root`` — at most one ``zarr.json`` read, no other I/O.
+
+        With ``cached=True`` (default) the underlying :class:`DecodePlan`
+        is shared process-wide (revalidated against ``zarr.json``'s stat
+        signature), so repeat opens also share the parsed-shard-index
+        cache.  Pass ``cached=False`` for a private, freshly-parsed plan.
+        """
+        return cls(open_plan(root, cached=cached))
 
     @classmethod
     def from_metadata(cls, metadata: dict[str, Any], root: str | Path) -> Self:
@@ -169,9 +175,12 @@ class AsyncArray:
         self._array = Array(plan)
 
     @classmethod
-    def open(cls, root: str | Path) -> Self:
-        """Open the array at ``root`` (metadata read happens synchronously)."""
-        return cls(open_plan(root))
+    def open(cls, root: str | Path, *, cached: bool = True) -> Self:
+        """Open the array at ``root`` (metadata read happens synchronously).
+
+        ``cached`` has :meth:`Array.open` semantics.
+        """
+        return cls(open_plan(root, cached=cached))
 
     @property
     def array(self) -> Array:

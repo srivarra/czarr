@@ -1,4 +1,4 @@
-"""Blosc decode benches — GPU-direct vs CPU, ported from bench/blosc/e2e_h100.py.
+"""Blosc decode benches — GPU-direct vs CPU, ported from bench/blosc/e2e_h100.py (git history).
 
 ``blosc-e2e`` reads a blosc ``[bitshuffle, zstd]`` store end to end:
 * ``store=gpu``   -> GPULocalStore (cuFile) + on-device GPU decode  (the path under test)

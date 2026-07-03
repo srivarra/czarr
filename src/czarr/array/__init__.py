@@ -3,8 +3,9 @@
 Public surface:
 
 * :class:`CudaZarrArray` — :class:`zarr.Array` subclass returned by the
-  factories; GPU behavior comes from the globally configured pipeline,
-  prototypes, and store, not from the subclass.
+  factories; basic-indexing reads route through the lowlevel fast path
+  (a cached :class:`czarr.core.Array`), everything else falls back to
+  zarr's machinery.
 * :func:`open_cuda_array` — open an existing array path and wrap it.
 * :func:`create_cuda_array` — create + wrap in one call.
 """

@@ -10,7 +10,7 @@ This subclass collects all chunk byte slices, runs them through
 :func:`czarr.lowlevel.coalesce.coalesce_ranges`, and issues fused
 reads — then slices per-chunk Buffer views out locally.
 
-Microbench on H100 (``bench/storage/coalesce_compare.py``):
+Microbench on H100 (``bench/storage/coalesce_compare.py``, untracked):
 
 * 32 x 64 KiB chunks   → 22.2x faster (26.5 ms → 1.20 ms)
 * 32 x 256 KiB chunks  → 17.7x
