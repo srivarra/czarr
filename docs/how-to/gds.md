@@ -21,6 +21,8 @@ ls /proc/driver/nvidia-fs                # exists when the kernel module is load
 /usr/local/cuda/gds/tools/gdscheck -p    # full platform report, if installed
 ```
 
+GDS is faster for large reads. Below roughly 16 MiB per read the pinned path is competitive, and the compatibility fallback is the pinned path, so small-chunk workloads lose little without GDS.
+
 ## Failure modes
 
 cuFile cannot read tmpfs. Reads from `/tmp` on tmpfs-backed systems return zeros or fail; there is no block device to DMA from. Keep stores on a real filesystem, and check `$TMPDIR` first when reads return all zeros.
@@ -47,7 +49,7 @@ cufile.configure(
 )
 ```
 
-A sweep of these on H100 against VAST (`bench/results/read-path.jsonl`) showed no improvement over the defaults.
+The defaults are appropriate on the systems we have tested; treat `configure()` as an escape hatch for unusual storage.
 
 The knob that does matter is czarr's own read threadpool; cuFile calls block, and czarr issues them in parallel:
 
@@ -56,16 +58,4 @@ arr.retrieve_array_subset(selection, max_workers=16)   # explicit API, per call
 czarr.configure_gpu(async_concurrency=32)              # zarr pipeline
 ```
 
-czarr also caches registered cuFile file handles process-wide (open plus register costs about 1 ms per file), revalidating each file's inode/mtime/size per read. `czarr.cufile.clear_handle_cache()` drops the cache.
-
-## Transfer measurements
-
-`czarr-bench sweep read-path`, H100, GDS, storage-to-GPU transfer only:
-
-| Transfer | 8 MiB chunks | 64 MiB | 256 MiB |
-|---|---|---|---|
-| cuFile GDS | 6.6 GiB/s | 19.5 | 24.6 |
-| pinned bounce + H2D | 11.4 | 15.1 | 18.1 |
-| pageable read + H2D | 5.4 | 5.2 | 5.0 |
-
-GDS wins at large reads; the pinned bounce wins below roughly 16 MiB. The compat fallback is the pinned path, so small-chunk workloads lose little without GDS.
+czarr caches registered cuFile file handles process-wide, revalidating each file's inode/mtime/size per read. `czarr.cufile.clear_handle_cache()` drops the cache.

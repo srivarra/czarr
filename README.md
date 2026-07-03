@@ -42,12 +42,12 @@ Both return `cupy.ndarray`. Writing goes through zarr (`czarr.create_cuda_array`
 
 | Situation | Codec |
 |---|---|
-| Default | `ANS` (30 GB/s decode, lowest scratch, scales past 4 GiB) |
-| Small arrays, max throughput | `Bitcomp` (35 GB/s; OOMs at 4 GiB on A40) |
+| Default | `ANS` (lowest scratch, scales past 4 GiB) |
+| Small arrays | `Bitcomp` (fastest below 4 GiB; OOMs above on A40) |
 | Interoperable bitstream | `Zstd`, `LZ4`, `Gzip`, `Zlib` (bit-identical with the CPU libraries) |
 | Existing blosc stores | decode-only via `czarr.Blosc`; write new data as `[Shuffle, Zstd]` |
 
-Chunks below 256 KiB decode faster on CPU Blosc; the GPU advantage starts near 1 MiB and reaches 14-60x at 16 MiB and above.
+GPU decode pays off from roughly 1 MiB chunks upward; below 256 KiB, multi-threaded CPU Blosc is faster.
 
 ## Chunk shapes for TCZYX microscopy
 
@@ -59,18 +59,6 @@ Chunks below 256 KiB decode faster on CPU Blosc; the GPU advantage starts near 1
 | Full timeseries, `arr[:, c, z]` | `(T, 1, 1, Y, X)` |
 
 Match the chunk to the access pattern so each read decodes only the chunks it touches. Sharded stores are handled: czarr replaces zarr's `sharding_indexed` codec with a variant that coalesces partial-shard reads.
-
-## Measurements
-
-H100, GPUDirect Storage, blosc `[bitshuffle, zstd]` store, 128-256 MiB chunks (`czarr-bench sweep zarr-read`; raw rows in `bench/results/`):
-
-| Read stack | GiB/s |
-|---|---|
-| czarr (lowlevel, tier-1 fast path, and zarr pipeline are equivalent) | 20 |
-| kvikio `GDSStore` + GPU codecs | 1.6-1.9 |
-| `LocalStore` + numcodecs, CPU decode + H2D | 1.0 |
-
-A40, codec only: Bitcomp decodes at 234 GB/s; zarr `arr[:]` with ANS at 64 MiB chunks reads at 69 GB/s against 3 GB/s for 16-thread CPU Blosc-lz4.
 
 ## Limitations
 

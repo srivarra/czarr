@@ -30,7 +30,7 @@ czarr does not encode blosc containers. Write new GPU-decodable data with `compr
 
 ## Sharded stores
 
-`configure_gpu()` registers a coalescing replacement for zarr's `sharding_indexed` codec. Partial-shard reads fuse adjacent inner chunks into single cuFile calls instead of zarr's one call per chunk. Measured on H100 with 32 x 64 KiB inner chunks: 26.5 ms to 1.2 ms per partial-shard read.
+`configure_gpu()` registers a coalescing replacement for zarr's `sharding_indexed` codec. Partial-shard reads fuse adjacent inner chunks into single cuFile calls instead of zarr's one call per chunk. Nothing needs to be configured per store.
 
 ## Codec backends
 
