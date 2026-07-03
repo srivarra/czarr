@@ -22,19 +22,26 @@ __all__ = [
     "ReadRequest",
     "ShardSpec",
     "coalesce_ranges",
+    "decode",
     "normalize_selection",
     "open_plan",
     "plan_from_metadata",
     "read",
+    "read_array",
     "slice_into_outputs",
 ]
 
-_LAZY = {"read": "czarr.lowlevel.io"}  # GPU-touching stages load on first use
+# GPU-touching stages load on first use (planning stays cupy-free).
+_LAZY = {
+    "read": "czarr.lowlevel.io",
+    "decode": "czarr.lowlevel.decode",
+    "read_array": "czarr.lowlevel.decode",
+}
 
 
 def __getattr__(name: str) -> Any:
     # Planning stays importable on hosts without CUDA; ``lowlevel.read``
-    # (and later ``decode``) pull cupy only when actually used.
+    # / ``decode`` / ``read_array`` pull cupy only when actually used.
     if name in _LAZY:
         import importlib
 

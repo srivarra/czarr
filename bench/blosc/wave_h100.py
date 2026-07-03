@@ -29,7 +29,7 @@ from zarr.storage import LocalStore
 
 import czarr
 from czarr import cufile as cufile_runtime
-from czarr.codecs._backends.blosc_nvcomp import decode_blosc_batch
+from czarr.lowlevel.blosc import decode_blosc_batch
 
 REPS, WARMUP = 5, 2
 

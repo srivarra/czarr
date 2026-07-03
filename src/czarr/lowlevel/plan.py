@@ -373,13 +373,19 @@ def plan_from_metadata(metadata: dict[str, Any], root: str | Path) -> DecodePlan
     else:
         decode_codecs = codecs
 
+    fill_value: Any = metadata.get("fill_value", 0)
+    if isinstance(fill_value, str):  # v3 spells special floats as strings
+        fill_value = {"NaN": np.nan, "Infinity": np.inf, "-Infinity": -np.inf}.get(fill_value)
+        if fill_value is None:
+            raise NotImplementedError(f"fill_value {metadata['fill_value']!r} not supported")
+
     return DecodePlan(
         root=root,
         shape=shape,
         dtype=dtype,
         chunk_shape=chunk_shape,
         codecs=decode_codecs,
-        fill_value=metadata.get("fill_value", 0),
+        fill_value=fill_value,
         shard=shard,
         key_separator=key_separator,
         key_prefix_c=key_prefix_c,

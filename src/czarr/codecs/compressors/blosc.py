@@ -4,7 +4,7 @@ Shadows zarr's CPU ``BloscCodec`` (codec id ``"blosc"``) when opted in via
 :func:`czarr.configure_gpu`, so existing blosc-compressed OME-Zarr stores
 decode on the GPU.  Decode-only: the on-GPU path is the
 fanout + native batched zstd + unshuffle pipeline in
-:mod:`czarr.codecs._backends.blosc_nvcomp` (10-15x over CPU blosc + H2D).
+:mod:`czarr.lowlevel.blosc` (10-15x over CPU blosc + H2D).
 
 Encoding raises — to produce GPU-decodable output, write ``[Shuffle, Zstd]``
 large-chunk instead (matches blosc's ratio within ~2%, no blosc container).
@@ -54,7 +54,7 @@ class Blosc(CudaBytesBytesCodec):
     blocksize: int = 0
 
     def _decode_sync(self, items: list[tuple[Buffer | None, ArraySpec]]) -> list[Buffer | None]:
-        from czarr.codecs._backends.blosc_nvcomp import decode_blosc_batch
+        from czarr.lowlevel.blosc import decode_blosc_batch
 
         out: list[Buffer | None] = [None] * len(items)
         idx, comps, specs = [], [], []
