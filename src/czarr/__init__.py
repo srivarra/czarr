@@ -66,6 +66,39 @@ from czarr.codecs.sharding import CzarrShardingCodec as _CzarrShardingCodec
 from czarr.storage import GPULocalStore, cufile_runtime
 
 
+class _GpuConfigToken:
+    """Handle returned by :func:`configure_gpu` — also a context manager.
+
+    ``configure_gpu`` applies its settings immediately, so the imperative call
+    (``czarr.configure_gpu()``) behaves exactly as before and the return value
+    can be ignored.  Used in a ``with`` block it additionally restores, on exit,
+    the prior **zarr.config** (codec-registry shadowing, GPU buffer prototypes,
+    pipeline path, batch_size) and the **codec-backend override map**::
+
+        with czarr.configure_gpu():
+            out = arr[:]  # GPU decode path active here
+        # zarr.config + backend overrides restored to their prior values
+
+    Not reverted: process-global one-time setup (RMM pool, nvCOMP allocator,
+    cuFile poll mode).  Those install once and have no clean teardown — a
+    second ``configure_gpu`` reconfigures them in place.
+    """
+
+    def __init__(self, config_token: Any, prev_overrides: dict[str, str]) -> None:
+        self._config_token = config_token
+        self._prev_overrides = prev_overrides
+
+    def __enter__(self) -> _GpuConfigToken:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        from czarr.codecs._backend import set_backend_overrides
+
+        self._config_token.__exit__(None, None, None)  # revert the zarr.config keys we set
+        set_backend_overrides(self._prev_overrides)
+        return False
+
+
 def configure_gpu(
     *,
     batch_size: int | None = None,
@@ -77,14 +110,13 @@ def configure_gpu(
     pinned_prealloc: Any = None,
     pipeline: bool = True,
     codec_backend_overrides: dict[str, str] | None = None,
-) -> None:
+) -> _GpuConfigToken:
     """One-call setup for GPU-codec workloads.
 
     Configures zarr's runtime so that:
 
     * The :class:`czarr.pipeline.CzarrPipeline` becomes the global
-      ``codec_pipeline`` (unless ``pipeline=False``).  Codecs route through
-      it and the shared :class:`PinnedHostPool` substrate.
+      ``codec_pipeline`` (unless ``pipeline=False``).
     * Every ``arr[:]`` (and any other selection) decodes the whole chunk
       batch in a single nvCOMP call — sets ``codec_pipeline.batch_size``
       to ``sys.maxsize`` so one ``CudaBytesBytesCodec.decode([all])``
@@ -137,9 +169,20 @@ def configure_gpu(
         to a per-instance ``backend=`` kwarg.  ``None`` clears any prior
         override map; pass ``{}`` to keep it empty without changing
         other settings.
+
+    Returns
+    -------
+    _GpuConfigToken
+        Applied immediately; the return value can be ignored for the usual
+        process-wide setup.  Used as a context manager
+        (``with configure_gpu(): ...``) it restores the prior zarr.config and
+        codec-backend overrides on block exit — handy for scoping the GPU
+        decode path or alternating it with the CPU path in one process.
     """
-    from czarr.codecs._backend import set_backend_overrides
+    from czarr.codecs._backend import get_backend_overrides, set_backend_overrides
     from czarr.pipeline import CzarrPipeline
+
+    prev_overrides = get_backend_overrides()  # snapshot for the reversible token
 
     if rmm_pool_gb is not None:
         use_rmm_pool(initial_size=int(rmm_pool_gb * (1 << 30)))
@@ -178,7 +221,10 @@ def configure_gpu(
     for cls in (Zstd, LZ4, Gzip, Zlib, Blosc, Shuffle, Delta, FixedScaleOffset, BitRound, _CzarrShardingCodec):
         settings[f"codecs.{cls.codec_name}"] = f"{cls.__module__}.{cls.__qualname__}"
 
-    zarr.config.set(settings)
+    # ``zarr.config.set`` applies immediately AND returns a revertible token;
+    # hold it so ``with configure_gpu(): ...`` can restore the prior config.
+    config_token = zarr.config.set(settings)
+    return _GpuConfigToken(config_token, prev_overrides)
 
 
 __all__ = [

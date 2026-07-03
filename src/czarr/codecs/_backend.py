@@ -39,6 +39,11 @@ def set_backend_overrides(overrides: Mapping[str, CodecBackend]) -> None:
     _BACKEND_OVERRIDES.update(overrides)
 
 
+def get_backend_overrides() -> dict[str, CodecBackend]:
+    """Snapshot the override map for save/restore (the reversible configure_gpu)."""
+    return dict(_BACKEND_OVERRIDES)
+
+
 def resolve_default_backend(
     codec_name: str,
     *,
