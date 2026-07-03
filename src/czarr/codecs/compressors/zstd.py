@@ -1,7 +1,7 @@
 """Zstd — RFC 8478 frame compatible with libzstd / numcodecs.Zstd."""
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
 from zarr.core.common import JSON
 
@@ -23,6 +23,7 @@ class Zstd(CudaBytesBytesCodec):
     level: int = 0
     checksum: bool = False
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Emit the zarr-v3 Zstd codec schema (no czarr-internal fields).
 

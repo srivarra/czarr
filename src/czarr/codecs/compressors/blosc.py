@@ -13,7 +13,7 @@ large-chunk instead (matches blosc's ratio within ~2%, no blosc container).
 import asyncio
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Self, override
 
 import cupy as cp
 import numpy as np
@@ -70,15 +70,18 @@ class Blosc(CudaBytesBytesCodec):
             out[i] = device_to_buffer(dev, spec.prototype)
         return out
 
+    @override
     async def decode(self, chunks_and_specs: Iterable[tuple[Buffer | None, ArraySpec]]) -> Iterable[Buffer | None]:
         """Decode a batch of blosc chunks via one native batched nvCOMP call."""
         items = list(chunks_and_specs)
         return await asyncio.to_thread(self._decode_sync, items)
 
+    @override
     async def encode(self, chunks_and_specs: Iterable[tuple[Buffer | None, ArraySpec]]) -> Iterable[Buffer | None]:
         """Not supported — write ``[Shuffle, Zstd]`` for GPU-decodable output."""
         raise NotImplementedError("czarr Blosc is decode-only; write [Shuffle, Zstd] large-chunk instead")
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Emit the zarr-v3 BloscCodec schema for round-trip with non-czarr readers."""
         return {
@@ -93,6 +96,7 @@ class Blosc(CudaBytesBytesCodec):
         }
 
     @classmethod
+    @override
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Build from a zarr-v3 BloscCodec metadata dict (tolerant of missing keys)."""
         cfg = codec_config(data)

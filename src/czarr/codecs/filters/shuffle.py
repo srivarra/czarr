@@ -15,7 +15,7 @@ runtime — not persisted in Zarr v3 metadata.
 """
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Self
+from typing import ClassVar, Self, override
 
 import cupy as cp
 from zarr.abc.codec import BytesBytesCodec
@@ -58,22 +58,26 @@ class Shuffle(BytesBytesCodec):
         )
         object.__setattr__(self, "backend", chosen)
 
+    @override
     async def _decode_single(self, chunk_data: Buffer, chunk_spec: ArraySpec) -> Buffer:
         arr = chunk_data.as_array_like()
         cp_arr = cp.asarray(arr).view(cp.uint8) if not isinstance(arr, cp.ndarray) else arr.view(cp.uint8)
         out = byteunshuffle(cp_arr, self.elementsize, cp_arr.size)
         return chunk_spec.prototype.buffer.from_array_like(out)
 
+    @override
     async def _encode_single(self, chunk_data: Buffer, chunk_spec: ArraySpec) -> Buffer:
         arr = chunk_data.as_array_like()
         cp_arr = cp.asarray(arr).view(cp.uint8) if not isinstance(arr, cp.ndarray) else arr.view(cp.uint8)
         out = byteshuffle(cp_arr, self.elementsize, cp_arr.size)
         return chunk_spec.prototype.buffer.from_array_like(out)
 
+    @override
     def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Shuffle is a permutation — same size in and out."""
         return input_byte_length
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Serialise codec config for storage in Zarr v3 metadata.
 
@@ -86,6 +90,7 @@ class Shuffle(BytesBytesCodec):
         }
 
     @classmethod
+    @override
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}.
 

@@ -17,7 +17,7 @@ parallelism on large N).
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import ClassVar, Self, override
 
 import cupy as cp
 import numpy as np
@@ -58,6 +58,7 @@ class BitRound(ArrayArrayCodec):
 
     keepbits: int = 12
 
+    @override
     async def _decode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         # Bits already truncated on encode; decode is identity.  Return
         # a buffer of the right prototype so downstream codecs see a
@@ -66,6 +67,7 @@ class BitRound(ArrayArrayCodec):
         out = cp.asarray(arr) if not isinstance(arr, cp.ndarray) else arr
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(out.reshape(chunk_spec.shape))
 
+    @override
     async def _encode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         x = cp.asarray(chunk_data.as_ndarray_like())
         if x.dtype not in _MANTISSA_BITS:
@@ -78,10 +80,12 @@ class BitRound(ArrayArrayCodec):
         out = _bitround_even(x, shift)
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(out.reshape(chunk_spec.shape))
 
+    @override
     def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Encoded size equals input — only mantissa bits change."""
         return input_byte_length
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Serialise codec config for storage in Zarr v3 metadata."""
         return {
@@ -90,6 +94,7 @@ class BitRound(ArrayArrayCodec):
         }
 
     @classmethod
+    @override
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
         return cls(**codec_config(data))

@@ -15,7 +15,7 @@ the documented path.
 """
 
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, override
 
 import numpy as np
 import zarr
@@ -84,6 +84,7 @@ class CudaZarrArray(zarr.Array):
         self.__dict__[_FAST_CACHE] = (meta, core)
         return core
 
+    @override
     def __getitem__(self, selection: Any) -> Any:
         """Read ``selection`` — lowlevel fast path first, zarr fallback second."""
         core = self._fast_array()
@@ -97,6 +98,7 @@ class CudaZarrArray(zarr.Array):
                 return out.squeeze(axis=axes) if axes else out
         return super().__getitem__(selection)
 
+    @override
     def __setitem__(self, selection: Any, value: Any) -> None:
         """Write through zarr; drop the cached plan (shard indexes may change)."""
         self.__dict__.pop(_FAST_CACHE, None)

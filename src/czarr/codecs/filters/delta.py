@@ -21,7 +21,7 @@ metadata.
 """
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Self
+from typing import ClassVar, Self, override
 
 import cupy as cp
 from numpy.typing import DTypeLike
@@ -69,6 +69,7 @@ class Delta(ArrayArrayCodec):
         )
         object.__setattr__(self, "backend", chosen)
 
+    @override
     async def _decode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         arr = cp.asarray(chunk_data.as_ndarray_like())
         flat = arr.ravel()
@@ -84,6 +85,7 @@ class Delta(ArrayArrayCodec):
             out = cp.cumsum(flat, dtype=cp.dtype(self.dtype))
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(out.reshape(chunk_spec.shape))
 
+    @override
     async def _encode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         # Encode is the same for both backends — cuda.compute has no
         # inverse-of-scan primitive; cupy diff is fine.  Kept in one
@@ -97,10 +99,12 @@ class Delta(ArrayArrayCodec):
             out = out.astype(self.astype, copy=False)
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(out.reshape(chunk_spec.shape))
 
+    @override
     def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Encoded size equals input — same element count, same dtype."""
         return input_byte_length
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Serialise codec config for storage in Zarr v3 metadata.
 
@@ -113,6 +117,7 @@ class Delta(ArrayArrayCodec):
         return {"name": self.codec_name, "configuration": config}
 
     @classmethod
+    @override
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}.
 

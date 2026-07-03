@@ -6,7 +6,7 @@ These produce nvCOMP's native chunked bitstream — fastest path, but
 """
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
 from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm
 
@@ -34,6 +34,7 @@ class Bitcomp(CudaBytesBytesCodec):
 
     algorithm_type: int = 0
 
+    @override
     def _codec_kwargs(self) -> dict:
         return {"algorithm_type": self.algorithm_type}
 
@@ -49,6 +50,7 @@ class Cascaded(CudaBytesBytesCodec):
     num_deltas: int = 1
     use_bitpack: bool = True
 
+    @override
     def _codec_kwargs(self) -> dict:
         return {
             "num_rles": self.num_rles,
@@ -84,6 +86,7 @@ class Deflate(CudaBytesBytesCodec):
 
     algorithm_type: int = 1
 
+    @override
     def _codec_kwargs(self) -> dict:
         return {"algorithm_type": self.algorithm_type}
 
@@ -103,5 +106,6 @@ class GDeflate(CudaBytesBytesCodec):
 
     algorithm_type: int = 1
 
+    @override
     def _codec_kwargs(self) -> dict:
         return {"algorithm_type": self.algorithm_type}

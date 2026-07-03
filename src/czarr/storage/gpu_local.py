@@ -2,6 +2,7 @@
 
 import asyncio
 from pathlib import Path
+from typing import override
 
 import cupy as cp
 from zarr.abc.store import ByteRequest, OffsetByteRequest, RangeByteRequest, SuffixByteRequest
@@ -99,6 +100,7 @@ class GPULocalStore(LocalStore):
         """Whether cuFile is usable in this process (real GDS or compat mode)."""
         return self._gds_available
 
+    @override
     async def get(
         self,
         key: str,
@@ -118,6 +120,7 @@ class GPULocalStore(LocalStore):
         except FileNotFoundError:
             return None
 
+    @override
     async def set(self, key: str, value: Buffer) -> None:
         """Write a Buffer to a key; uses cuFile when value is a gpu Buffer."""
         self._check_writable()

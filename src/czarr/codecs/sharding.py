@@ -26,7 +26,7 @@ array creation, or globally via :func:`czarr.configure_gpu` (TODO).
 
 import asyncio
 from collections.abc import Iterable
-from typing import ClassVar
+from typing import ClassVar, override
 
 from zarr.abc.codec import Codec
 from zarr.abc.store import ByteGetter, RangeByteRequest
@@ -103,6 +103,7 @@ class CzarrShardingCodec(ShardingCodec):
         object.__setattr__(self, "max_fused_bytes", int(max_fused_bytes))
         object.__setattr__(self, "max_gap_bytes", int(max_gap_bytes))
 
+    @override
     async def _decode_partial_single(
         self,
         byte_getter: ByteGetter,

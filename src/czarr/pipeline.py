@@ -36,7 +36,7 @@ directly — zarr 3.x does not accept a ``codec_pipeline=`` kwarg per array.
 """
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from zarr.abc.codec import GetResult
 from zarr.abc.store import ByteGetter, ByteSetter
@@ -77,6 +77,7 @@ class CzarrPipeline(BatchedCodecPipeline):
     # up as an interleaved blur of unrelated chunks.
     # ------------------------------------------------------------------
 
+    @override
     async def read_batch(
         self,
         batch_info: Iterable[tuple[ByteGetter, ArraySpec, SelectorTuple, SelectorTuple, bool]],
@@ -89,6 +90,7 @@ class CzarrPipeline(BatchedCodecPipeline):
         with nvtx_range("czarr.pipeline.read_batch", n=len(items)):
             return await super().read_batch(items, out, drop_axes)
 
+    @override
     async def write_batch(
         self,
         batch_info: Iterable[tuple[ByteSetter, ArraySpec, SelectorTuple, SelectorTuple, bool]],

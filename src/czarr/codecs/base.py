@@ -23,7 +23,7 @@ import threading
 from collections.abc import Iterable
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Self, override
 
 import cupy as cp
 from nvidia import nvcomp
@@ -326,6 +326,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
                     out[idx] = buf
             return out
 
+    @override
     async def encode(
         self,
         chunks_and_specs: Iterable[tuple[Buffer | None, ArraySpec]],
@@ -334,6 +335,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
         items = list(chunks_and_specs)
         return await asyncio.to_thread(self._batch_sync, items, "encode")
 
+    @override
     async def decode(
         self,
         chunks_and_specs: Iterable[tuple[Buffer | None, ArraySpec]],
@@ -342,6 +344,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
         items = list(chunks_and_specs)
         return await asyncio.to_thread(self._batch_sync, items, "decode")
 
+    @override
     def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Encoded size is data-dependent for compressors; raise to signal unknown."""
         raise NotImplementedError
@@ -350,6 +353,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
     # Metadata serialisation — config fields round-trip in Zarr metadata.
     # ------------------------------------------------------------------
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Serialise codec config for storage in Zarr metadata."""
         config: dict[str, JSON] = {}
@@ -363,6 +367,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
         return {"name": self.codec_name, "configuration": config}
 
     @classmethod
+    @override
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct a codec from its ``to_dict`` payload (tolerant of CPU schemas)."""
         raw = codec_config(data)
