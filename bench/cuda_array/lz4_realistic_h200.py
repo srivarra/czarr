@@ -24,8 +24,6 @@ For each pass: compression ratio of the filter chain output; native
 vs nvcomp decode-only timings; bit-exact validation off the hot loop.
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import statistics

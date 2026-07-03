@@ -43,8 +43,6 @@ Run::
         --compressor ans --store gpu --rewrite
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import statistics

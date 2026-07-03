@@ -14,8 +14,6 @@ mismatch) while still verifying:
   ``Buffer`` class with the right bytes.
 """
 
-from __future__ import annotations
-
 import cupy as cp
 import numpy as np
 import pytest

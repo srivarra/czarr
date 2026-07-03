@@ -8,8 +8,6 @@ Both validate bit-exact against the same CPU reference before timing.  GiB/s is
 on the logical (uncompressed) payload; ``compressed_ratio`` rides every row.
 """
 
-from __future__ import annotations
-
 import zarr
 
 from czarr.bench.context import BenchContext

@@ -27,13 +27,8 @@ When the requests are already widely separated (e.g. sparse chunk
 selections) the algorithm degrades cleanly to N un-fused windows.
 """
 
-from __future__ import annotations
-
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 @dataclass(frozen=True)

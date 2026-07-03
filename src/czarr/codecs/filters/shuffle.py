@@ -14,21 +14,17 @@ ever shows it mattering (see git history).  The ``backend`` field is
 runtime — not persisted in Zarr v3 metadata.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar, Self
 
 import cupy as cp
 from zarr.abc.codec import BytesBytesCodec
+from zarr.core.array_spec import ArraySpec
+from zarr.core.buffer import Buffer
+from zarr.core.common import JSON
 
 from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
 from czarr.kernels.byteshuffle import byteshuffle, byteunshuffle
-
-if TYPE_CHECKING:
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import Buffer
-    from zarr.core.common import JSON
 
 
 @dataclass(frozen=True)
@@ -89,7 +85,7 @@ class Shuffle(BytesBytesCodec):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, JSON]) -> Shuffle:
+    def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}.
 
         Tolerant of writers that leak ``backend`` into the configuration.

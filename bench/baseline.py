@@ -11,8 +11,6 @@ Run:
 Output: a sorted GPU table + a sorted CPU table per workload + RMM profile.
 """
 
-from __future__ import annotations
-
 import dataclasses
 import statistics
 import time

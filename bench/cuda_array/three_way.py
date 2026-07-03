@@ -22,8 +22,6 @@ chunks, zstd compression.  Matches the slice_compare canonical bench.
 Output throughput is reported in GiB/s (raw uncompressed bytes / wall).
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import statistics

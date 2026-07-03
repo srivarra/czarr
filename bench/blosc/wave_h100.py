@@ -12,8 +12,6 @@ the wave (register-once batched read) is worth a CzarrPipeline. No C++.
 Run: module load cuda && uv run --extra cu12 python -m bench.blosc.wave_h100 [--chunk-z 128]
 """
 
-from __future__ import annotations
-
 import argparse
 import glob
 import os

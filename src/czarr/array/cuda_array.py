@@ -12,7 +12,7 @@ the constructor exists for parity with :class:`zarr.Array` but is not
 the documented path.
 """
 
-from __future__ import annotations
+from typing import Self
 
 import zarr
 
@@ -27,7 +27,7 @@ class CudaZarrArray(zarr.Array):
     """
 
     @classmethod
-    def wrap(cls, array: zarr.Array, /) -> CudaZarrArray:
+    def wrap(cls, array: zarr.Array, /) -> Self:
         """Wrap an existing :class:`zarr.Array`.
 
         The preferred constructor — re-uses the existing array's

@@ -8,8 +8,6 @@ bit-exactness. Needs real GDS (H100 + nvidia-fs); A40 cuFile is compat-broken.
 Run: module load cuda && uv run --extra cu12 python -m bench.blosc.e2e_h100
 """
 
-from __future__ import annotations
-
 import os
 import statistics
 import time

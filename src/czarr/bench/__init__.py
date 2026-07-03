@@ -19,8 +19,6 @@ Public surface for authoring benches::
 The CLI (``czarr-bench``) lives in :mod:`czarr.bench.cli`.
 """
 
-from __future__ import annotations
-
 from .context import BenchContext, BenchPlan
 from .registry import benchmark, load_all
 

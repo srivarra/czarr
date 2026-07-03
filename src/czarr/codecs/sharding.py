@@ -24,29 +24,20 @@ unchanged; opt-in by passing ``serializer=CzarrShardingCodec(...)`` at
 array creation, or globally via :func:`czarr.configure_gpu` (TODO).
 """
 
-from __future__ import annotations
-
 import asyncio
-from typing import TYPE_CHECKING, ClassVar
+from collections.abc import Iterable
+from typing import ClassVar
 
-from zarr.abc.store import RangeByteRequest
-from zarr.codecs.sharding import ShardingCodec, _ShardingByteGetter
+from zarr.abc.codec import Codec
+from zarr.abc.store import ByteGetter, RangeByteRequest
+from zarr.codecs.sharding import ShardingCodec, ShardingCodecIndexLocation, _ShardingByteGetter
+from zarr.core.array_spec import ArraySpec
+from zarr.core.buffer import Buffer, BufferPrototype, NDBuffer
 from zarr.core.chunk_grids import ChunkGrid
-from zarr.core.indexing import get_indexer
+from zarr.core.common import JSON, ShapeLike
+from zarr.core.indexing import SelectorTuple, get_indexer
 
 from czarr.lowlevel.coalesce import ByteRange, coalesce_ranges
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from zarr.abc.codec import Codec
-    from zarr.abc.store import ByteGetter
-    from zarr.codecs.sharding import ShardingCodecIndexLocation
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import Buffer, BufferPrototype, NDBuffer
-    from zarr.core.common import JSON, ShapeLike
-    from zarr.core.indexing import SelectorTuple
-
 
 # Default knobs — tuned from the H100 microbench.  64 MiB is large
 # enough to fuse a whole shard (typical shards are 32-128 MiB) without

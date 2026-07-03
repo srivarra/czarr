@@ -40,9 +40,6 @@ optional-dependencies.cu12 = [
   "nvidia-cuda-runtime-cu12>=12.9.79",
   "nvidia-nvcomp-cu12>=5.1.0.21",
   "rmm-cu12>=26",
-  # Nsight Compute kernel-metrics driver (czarr-bench --ncu). Pulls nvtx +
-  # nvidia-ml-py (pynvml) used by the bench telemetry layer. Needs `ncu` on
-  # PATH (bundled with the cuda module) only for the --ncu metrics mode.
   "nsight-python[cu12]>=0.9.6",
 ]
 optional-dependencies.cu13 = [
@@ -238,5 +235,3 @@ skip = [
   "docs/references.md",
   "docs/notebooks/example.ipynb",
 ]
-
-# RMM wheels are published on NVIDIA's index, not the public PyPI mirror.

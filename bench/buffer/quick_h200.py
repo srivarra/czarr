@@ -14,8 +14,6 @@ Run::
         [--path /tmp/store.zarr] [--reps 8] [--rewrite]
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import statistics

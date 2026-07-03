@@ -11,21 +11,17 @@ Reads are ndim-preserving: an integer selects a length-1 range and the
 axis is retained (tier 1 squeezes axes on top for numpy semantics).
 """
 
-from __future__ import annotations
-
 import json
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from itertools import product
 from pathlib import Path
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 
 from czarr.lowlevel.coalesce import ByteRange, coalesce_ranges
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
 
 # zarr v3 sharding index sentinel: offset == nbytes == 2**64-1 → missing chunk.
 _MISSING = 2**64 - 1

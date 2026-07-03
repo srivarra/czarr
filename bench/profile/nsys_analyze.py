@@ -15,8 +15,6 @@ Generate the SQLite from an nsys-rep:
     nsys export --type=sqlite profile.nsys-rep
 """
 
-from __future__ import annotations
-
 import argparse
 import sqlite3
 import sys

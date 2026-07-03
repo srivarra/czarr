@@ -4,8 +4,6 @@ Host-only: fixture stores are written with zarr-python (CPU path), and
 plan.py itself never imports cupy.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 import zarr

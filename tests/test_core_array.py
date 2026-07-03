@@ -1,7 +1,5 @@
 """Tests for czarr.core.Array / AsyncArray (GPU required for reads)."""
 
-from __future__ import annotations
-
 import asyncio
 
 import numpy as np

@@ -7,8 +7,6 @@ whether batch_io_submit wins in *that* regime before committing to a
 Phase 3 implementation.
 """
 
-from __future__ import annotations
-
 import ctypes
 import os
 import time

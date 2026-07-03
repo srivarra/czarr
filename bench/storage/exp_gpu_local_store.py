@@ -17,8 +17,6 @@ Run:
     uv run --extra cu12 --group test python -m bench.storage.exp_gpu_local_store
 """
 
-from __future__ import annotations
-
 import shutil
 import statistics
 import tempfile

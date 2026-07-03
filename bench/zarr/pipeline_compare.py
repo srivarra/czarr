@@ -18,8 +18,6 @@ Run::
     uv run --extra cu12 --group test python -m bench.zarr.pipeline_compare
 """
 
-from __future__ import annotations
-
 import os
 import statistics
 import tempfile

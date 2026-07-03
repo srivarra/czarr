@@ -10,8 +10,6 @@ against the stock decode path.  Real perf coverage lives in
 ``bench/storage/coalesce_compare.py`` (microbench).
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 import zarr

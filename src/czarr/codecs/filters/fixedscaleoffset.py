@@ -29,21 +29,17 @@ quantisation boundaries.
 ``backend`` is runtime and not persisted in Zarr v3 metadata.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar, Self
 
 import cupy as cp
+from numpy.typing import DTypeLike
 from zarr.abc.codec import ArrayArrayCodec
+from zarr.core.array_spec import ArraySpec
+from zarr.core.buffer import NDBuffer
+from zarr.core.common import JSON
 
 from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
-
-if TYPE_CHECKING:
-    from numpy.typing import DTypeLike
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import NDBuffer
-    from zarr.core.common import JSON
 
 
 @dataclass(frozen=True)
@@ -140,7 +136,7 @@ class FixedScaleOffset(ArrayArrayCodec):
         return {"name": self.codec_name, "configuration": config}
 
     @classmethod
-    def from_dict(cls, data: dict[str, JSON]) -> FixedScaleOffset:
+    def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}.
 
         Tolerant of writers that leak ``backend`` into the configuration.

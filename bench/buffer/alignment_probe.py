@@ -20,8 +20,6 @@ Output is a small table written to stdout and (optionally) appended to
 ``docs/planning/buffer-spike.md`` if --emit-doc is passed.
 """
 
-from __future__ import annotations
-
 import argparse
 import sys
 from dataclasses import dataclass

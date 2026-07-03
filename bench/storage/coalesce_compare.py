@@ -19,8 +19,6 @@ to-apples with the ShardingCodec hot path; we deliberately do NOT run
 them concurrently because the codec's loop is a serial ``await``.
 """
 
-from __future__ import annotations
-
 import argparse
 import time
 from pathlib import Path

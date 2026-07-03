@@ -8,8 +8,6 @@ Delta filter's encode stays inline (``cupy.diff`` + scalar write).
 Bit-exact with ``numcodecs.Delta`` for the same dtype.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 import cupy as cp

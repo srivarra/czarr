@@ -15,8 +15,6 @@ non-multiple-of-8 tail handling is not yet reproduced).  Verified for the
 common case (e.g. blocksize 32768, typesize 2 -> 16384 elems).
 """
 
-from __future__ import annotations
-
 from functools import cache
 
 import cupy as cp

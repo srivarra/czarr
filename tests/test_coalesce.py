@@ -1,7 +1,5 @@
 """Unit tests for the byte-range coalescer."""
 
-from __future__ import annotations
-
 import pytest
 
 from czarr.lowlevel.coalesce import (

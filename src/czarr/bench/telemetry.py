@@ -5,8 +5,6 @@ unreadable (the H100/H200/A100 GDS matrix and the tmpfs-vs-NVMe lesson both
 turn on context).  This module collects that context cheaply.
 """
 
-from __future__ import annotations
-
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager

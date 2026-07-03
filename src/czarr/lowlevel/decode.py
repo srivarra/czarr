@@ -18,9 +18,7 @@ Anything else raises ``NotImplementedError`` — use tier 1 (zarr-python
 + czarr codecs) for exotic chains.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import cupy as cp
 import numpy as np
@@ -29,9 +27,7 @@ from nvidia import nvcomp
 from czarr._nvtx import nvtx_range
 from czarr.alloc import register_nvcomp_allocator
 from czarr.kernels.byteshuffle import byteunshuffle
-
-if TYPE_CHECKING:
-    from czarr.lowlevel.plan import DecodePlan, ReadRequest
+from czarr.lowlevel.plan import DecodePlan, ReadRequest
 
 # Codec(algorithm=...) cache — nvCOMP codec construction has real cost
 # and the instances are reusable per thread; lowlevel.decode is

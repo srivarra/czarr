@@ -35,23 +35,20 @@ use ``with czarr.configure_gpu(): ...`` or set
 directly — zarr 3.x does not accept a ``codec_pipeline=`` kwarg per array.
 """
 
-from __future__ import annotations
-
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from zarr.abc.codec import GetResult
+from zarr.abc.store import ByteGetter, ByteSetter
+from zarr.core.array_spec import ArraySpec
+from zarr.core.buffer import NDBuffer
 from zarr.core.codec_pipeline import BatchedCodecPipeline
+from zarr.core.indexing import SelectorTuple
 
 from czarr._nvtx import nvtx_range
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-    from zarr.abc.codec import CodecPipeline  # noqa: F401
-    from zarr.abc.store import ByteGetter, ByteSetter
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import NDBuffer
-    from zarr.core.codec_pipeline import GetResult
-    from zarr.core.indexing import SelectorTuple
+    pass
 
 
 class CzarrPipeline(BatchedCodecPipeline):

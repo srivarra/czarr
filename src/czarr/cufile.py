@@ -9,8 +9,6 @@ benching 1.8-14x slower than threaded sync reads on Bruno NFS (see git
 history and ``bench/storage/probe_cufile_async.py`` for the constraints).
 """
 
-from __future__ import annotations
-
 import atexit
 import ctypes
 import os

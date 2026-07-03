@@ -13,18 +13,13 @@ so encode (float→int) and decode (int→float) reuse the same machinery
 without separate kernels per direction.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import cupy as cp
 import numpy as np
+from numpy.typing import DTypeLike
 
 from czarr.codecs._backends import import_cccl
-
-if TYPE_CHECKING:
-    from numpy.typing import DTypeLike
-
 
 # (op_kind, in_dtype, out_dtype, scale_bits, offset_bits) → cached transformer.
 # We key on the IEEE-754 bit pattern of the scalars so two FSO codecs with

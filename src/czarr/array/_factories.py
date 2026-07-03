@@ -13,19 +13,15 @@ for non-cuFile workflows) pass an explicit :class:`zarr.abc.store.Store`
 instance and the factories pass it straight through.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
+import numpy.typing as npt
 import zarr
 import zarr.abc.store
 
 from czarr.array.cuda_array import CudaZarrArray
 from czarr.storage import GPULocalStore
-
-if TYPE_CHECKING:
-    import numpy.typing as npt
 
 
 def _resolve_store(

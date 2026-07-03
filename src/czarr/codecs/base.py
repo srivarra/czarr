@@ -18,30 +18,24 @@ optionally tweak:
   Adler-32 trailer for zlib).
 """
 
-from __future__ import annotations
-
 import asyncio
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import cupy as cp
 from nvidia import nvcomp
 from zarr.abc.codec import BytesBytesCodec
+from zarr.core.array_spec import ArraySpec
+from zarr.core.buffer import Buffer
+from zarr.core.common import JSON
 
 from czarr._nvtx import nvtx_range
 from czarr.alloc import register_nvcomp_allocator
 from czarr.codecs._nvcomp_buffer import buffer_to_nvarray, device_to_buffer, nvarray_to_buffer
 from czarr.core.buffer import is_gpu_buffer
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import Self
-
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import Buffer
-    from zarr.core.common import JSON
 
 
 class _Algorithm(StrEnum):

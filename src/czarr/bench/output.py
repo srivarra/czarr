@@ -5,15 +5,16 @@ results trackable across hardware and commits with no database — diff them in
 git, load them with pandas.
 """
 
-from __future__ import annotations
-
 import json
+import os
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-RESULTS_DIR = Path(__file__).resolve().parents[3] / "bench" / "results"
+# Default assumes the editable-install repo layout; CZARR_BENCH_RESULTS
+# overrides for wheel installs or custom result sinks.
+RESULTS_DIR = Path(os.environ.get("CZARR_BENCH_RESULTS") or Path(__file__).resolve().parents[3] / "bench" / "results")
 
 
 @dataclass(slots=True)

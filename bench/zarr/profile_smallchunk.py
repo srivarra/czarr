@@ -9,8 +9,6 @@ Run:
     uv run --extra cu12 --group test python -m bench.zarr.profile_smallchunk
 """
 
-from __future__ import annotations
-
 import cProfile
 import io
 import os

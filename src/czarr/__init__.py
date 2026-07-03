@@ -25,12 +25,10 @@ Existing CPU-written zstd/lz4/gzip/zlib zarr files decode on the GPU
 transparently after :func:`configure_gpu`.
 """
 
-from __future__ import annotations
-
 import platform
 import sys
 from importlib.metadata import version
-from typing import Any
+from typing import Any, Self
 
 if platform.system() != "Linux":
     raise RuntimeError(f"czarr only supports Linux, not {platform.system()}")
@@ -88,7 +86,7 @@ class _GpuConfigToken:
         self._config_token = config_token
         self._prev_overrides = prev_overrides
 
-    def __enter__(self) -> _GpuConfigToken:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> bool:

@@ -12,8 +12,6 @@ pipeline because:
 * No GPU acceleration today; tracked as follow-up.
 """
 
-from __future__ import annotations
-
 import cupy as cp
 import numpy as np
 import zarr

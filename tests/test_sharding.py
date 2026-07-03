@@ -9,8 +9,6 @@ GPU-pipeline behaviour for inner-chunk decode *without* writing a new
 ShardingCodec.
 """
 
-from __future__ import annotations
-
 import cupy as cp
 import numpy as np
 import zarr

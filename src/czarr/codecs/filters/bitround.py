@@ -16,20 +16,15 @@ upside (no kernel-launch savings vs cupy on small N, no algorithmic
 parallelism on large N).
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar, Self
 
 import cupy as cp
 import numpy as np
 from zarr.abc.codec import ArrayArrayCodec
-
-if TYPE_CHECKING:
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import NDBuffer
-    from zarr.core.common import JSON
-
+from zarr.core.array_spec import ArraySpec
+from zarr.core.buffer import NDBuffer
+from zarr.core.common import JSON
 
 # Mantissa bit-width per float dtype.
 _MANTISSA_BITS = {
@@ -93,7 +88,7 @@ class BitRound(ArrayArrayCodec):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, JSON]) -> BitRound:
+    def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}."""
         cfg = data.get("configuration", {k: v for k, v in data.items() if k != "name"})
         return cls(**cfg)

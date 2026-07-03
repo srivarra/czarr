@@ -5,8 +5,6 @@ works, (c) returned bytes match what was written.  Run from sbatch on an H100
 node where nvidia_fs is loaded.
 """
 
-from __future__ import annotations
-
 import ctypes
 import os
 import sys

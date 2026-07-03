@@ -8,8 +8,6 @@ backend-resolution machinery stays so an override or kwarg naming a
 removed/unknown backend fails loudly instead of silently falling back.
 """
 
-from __future__ import annotations
-
 import pytest
 
 import czarr

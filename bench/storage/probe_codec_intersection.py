@@ -7,8 +7,6 @@ Outcomes inform which nvCOMP codecs we can register under numcodecs/zarr codec
 names for transparent CPU→GPU interop.
 """
 
-from __future__ import annotations
-
 import cupy as cp
 import numcodecs
 import numpy as np

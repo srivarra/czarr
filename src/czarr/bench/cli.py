@@ -10,15 +10,16 @@
 then can't take down the rest of a sweep.  Sweeps isolate by default.
 """
 
-from __future__ import annotations
-
 import itertools
 import json
 import subprocess
 import sys
 from typing import Annotated
 
-import typer
+try:
+    import typer
+except ModuleNotFoundError:
+    raise SystemExit("czarr-bench needs the 'bench' extra: pip install 'czarr[bench]'") from None
 
 from .output import Row, render_table, write_jsonl
 from .registry import BenchSpec, load_all

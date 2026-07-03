@@ -6,8 +6,6 @@ values.  These tests pin the new banker's-rounding implementation to
 the numcodecs reference output.
 """
 
-from __future__ import annotations
-
 import importlib
 
 import cupy as cp

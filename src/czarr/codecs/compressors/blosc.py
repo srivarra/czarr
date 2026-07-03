@@ -10,26 +10,20 @@ Encoding raises — to produce GPU-decodable output, write ``[Shuffle, Zstd]``
 large-chunk instead (matches blosc's ratio within ~2%, no blosc container).
 """
 
-from __future__ import annotations
-
 import asyncio
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import cupy as cp
 import numpy as np
+from zarr.core.array_spec import ArraySpec
+from zarr.core.buffer import Buffer
+from zarr.core.common import JSON
 
 from czarr.codecs._nvcomp_buffer import device_to_buffer
 from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind
 from czarr.core.buffer import is_gpu_buffer
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import Self
-
-    from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import Buffer
-    from zarr.core.common import JSON
 
 
 @dataclass(frozen=True)

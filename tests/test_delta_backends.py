@@ -8,8 +8,6 @@ Delta backends are ``"cupy"`` (default, cupy.cumsum / cupy.diff) and
 Zarr v3 metadata; both produce bit-identical bytes.
 """
 
-from __future__ import annotations
-
 import importlib
 
 import pytest

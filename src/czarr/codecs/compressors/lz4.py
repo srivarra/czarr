@@ -12,15 +12,12 @@ the custom kernel was dropped in favour of wrapping nvCOMP, the same as
 every other compressor.)
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar, Self
+
+from zarr.core.common import JSON
 
 from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind
-
-if TYPE_CHECKING:
-    from zarr.core.common import JSON
 
 
 @dataclass(frozen=True)
@@ -54,7 +51,7 @@ class LZ4(CudaBytesBytesCodec):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, JSON]) -> LZ4:
+    def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata."""
         cfg = dict(data.get("configuration", {}))
         return cls(**cfg)

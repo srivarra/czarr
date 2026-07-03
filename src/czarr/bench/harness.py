@@ -5,8 +5,6 @@ declarative.  Order is deliberate: correctness is checked before the timing
 loop, so a wrong result fails fast and never gets reported as a fast number.
 """
 
-from __future__ import annotations
-
 import statistics
 import time
 

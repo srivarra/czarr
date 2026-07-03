@@ -1,17 +1,11 @@
 """Conversions between Zarr ``Buffer``, device arrays, and ``nvcomp.Array``."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 import cupy as cp
 import numpy as np
 from nvidia import nvcomp
+from zarr.core.buffer import Buffer, BufferPrototype
 
 from czarr.core.buffer import is_gpu_prototype
-
-if TYPE_CHECKING:
-    from zarr.core.buffer import Buffer, BufferPrototype
 
 # nvCOMP's batched encode/decode kernels read with vector loads that need
 # at least 16-byte alignment of the source pointer.  RMM/cupy pools usually

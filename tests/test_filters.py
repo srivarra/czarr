@@ -1,7 +1,5 @@
 """Phase 3 filter codec tests: Shuffle, Delta, FixedScaleOffset, BitRound."""
 
-from __future__ import annotations
-
 import cupy as cp
 import numcodecs
 import numpy as np

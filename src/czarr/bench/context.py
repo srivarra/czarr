@@ -7,8 +7,6 @@ and the byte count.  The harness drives everything else (warmup, reps, median,
 GiB/s, telemetry, output) so the bench itself stays declarative.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any

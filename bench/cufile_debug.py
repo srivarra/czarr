@@ -15,8 +15,6 @@ Strategies:
 Run: uv run --extra cu12 python -m bench.cufile_debug --strategy A
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 

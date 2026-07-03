@@ -11,12 +11,7 @@ its hand-written native codecs after profiling showed the codec is
 rarely the read-path bottleneck.  This module now serves the filters.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
+from collections.abc import Mapping
 
 # CodecBackend is intentionally widened to ``str`` — each codec class
 # pins the valid set via its ``_supported_backends`` tuple.  Filters use

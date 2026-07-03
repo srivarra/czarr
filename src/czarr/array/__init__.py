@@ -9,8 +9,6 @@ Public surface:
 * :func:`create_cuda_array` — create + wrap in one call.
 """
 
-from __future__ import annotations
-
 from czarr.array._factories import (
     create_cuda_array,
     open_cuda_array,

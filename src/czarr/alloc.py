@@ -20,8 +20,6 @@ cupy ships its own ``MemoryPool`` — so the helper is for users who want to
 share a pool across czarr, cuDF, cuML, kvikIO, etc.
 """
 
-from __future__ import annotations
-
 import threading
 
 import cupy as cp

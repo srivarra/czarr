@@ -1,7 +1,5 @@
 """Tests for the cupy/RMM allocator wiring exposed by ``czarr.alloc``."""
 
-from __future__ import annotations
-
 import cupy as cp
 import numpy as np
 import rmm

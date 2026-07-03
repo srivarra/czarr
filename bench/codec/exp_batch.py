@@ -13,8 +13,6 @@ Run:
     uv run --extra cu12 --group test python -m bench.codec.exp_batch
 """
 
-from __future__ import annotations
-
 import statistics
 import warnings
 

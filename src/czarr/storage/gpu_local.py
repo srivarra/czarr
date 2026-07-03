@@ -1,26 +1,18 @@
 """GPU-aware local-filesystem store: cuFile reads/writes when prototype is GPU."""
 
-from __future__ import annotations
-
 import asyncio
 import os
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import cupy as cp
-from zarr.abc.store import OffsetByteRequest, RangeByteRequest, SuffixByteRequest
-from zarr.core.buffer import default_buffer_prototype
+from zarr.abc.store import ByteRequest, OffsetByteRequest, RangeByteRequest, SuffixByteRequest
+from zarr.core.buffer import Buffer, BufferPrototype, default_buffer_prototype
 from zarr.core.buffer import gpu as gpu_buffer
 from zarr.storage import LocalStore
 
 from czarr import cufile
 from czarr._nvtx import nvtx_range
 from czarr.core.buffer import is_gpu_prototype
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from zarr.abc.store import ByteRequest
-    from zarr.core.buffer import Buffer, BufferPrototype
 
 
 def _resolve_byte_range(byte_range: ByteRequest | None, file_size: int) -> tuple[int, int]:

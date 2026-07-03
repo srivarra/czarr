@@ -1,7 +1,5 @@
 """GPU blosc decode (czarr.codecs.compressors.Blosc) — native nvCOMP batched path."""
 
-from __future__ import annotations
-
 import os
 import struct
 import tempfile

@@ -16,8 +16,6 @@ fall back to a POSIX bounce internally or assert (use --isolate). ``gds_availabl
 is recorded per row.
 """
 
-from __future__ import annotations
-
 from concurrent.futures import ThreadPoolExecutor
 
 import cupy as cp

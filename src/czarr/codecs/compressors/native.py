@@ -5,8 +5,6 @@ These produce nvCOMP's native chunked bitstream — fastest path, but
 ``czarr.*`` codec names so they never collide with stdlib codecs.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import ClassVar
 

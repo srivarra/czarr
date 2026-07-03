@@ -6,8 +6,6 @@ not exercised here; real-GPU coverage lives in the storage/pipeline
 tests and the bench harness.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 import zarr

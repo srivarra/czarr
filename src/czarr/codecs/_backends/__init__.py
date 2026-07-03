@@ -10,12 +10,8 @@ hand-written native compressor.  These modules serve the filters:
 Delta and FixedScaleOffset.)
 """
 
-from __future__ import annotations
-
+from types import ModuleType
 from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from types import ModuleType
 
 
 def import_cccl() -> ModuleType:

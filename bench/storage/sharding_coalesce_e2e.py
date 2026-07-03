@@ -14,8 +14,6 @@ measured as a sanity check — they go through the unchanged
 ``_load_full_shard_maybe`` branch and should be ~tied across configs.
 """
 
-from __future__ import annotations
-
 import argparse
 import shutil
 import time
@@ -28,7 +26,7 @@ from zarr.codecs.sharding import ShardingCodec
 from zarr.storage import LocalStore
 
 import czarr
-from czarr import CzarrShardingCodec
+from czarr.codecs import CzarrShardingCodec
 from czarr.storage import GPULocalStore
 
 

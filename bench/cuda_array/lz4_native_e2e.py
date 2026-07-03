@@ -22,8 +22,6 @@ Outputs:
 * Median GiB/s for each path
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import statistics

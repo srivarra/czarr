@@ -4,8 +4,6 @@ Every parity test is bit-exact against a zarr-python CPU read of the same
 store — the hard correctness gate from the design doc.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 import zarr

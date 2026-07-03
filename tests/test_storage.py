@@ -1,7 +1,5 @@
 """Tests for ``czarr.storage.GPULocalStore`` (cuFile-backed local store)."""
 
-from __future__ import annotations
-
 import cupy as cp
 import numpy as np
 import pytest

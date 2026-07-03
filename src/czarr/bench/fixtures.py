@@ -7,8 +7,6 @@ and opens the store as either a ``GPULocalStore`` (cuFile/GPU decode) or a plain
 ``LocalStore`` (CPU baseline).  Records the compressed size/ratio as regime.
 """
 
-from __future__ import annotations
-
 import os
 from dataclasses import dataclass
 from pathlib import Path

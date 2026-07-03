@@ -11,8 +11,6 @@ Run:
     uv run --extra cu12 --group test python -m bench.zarr.exp_zarr_e2e
 """
 
-from __future__ import annotations
-
 import statistics
 import time
 import warnings

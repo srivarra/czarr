@@ -16,8 +16,6 @@ Run:
         --output bench/logs/sweep_<jobid>.csv
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import os

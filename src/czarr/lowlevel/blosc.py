@@ -20,8 +20,6 @@ The native API is experimental (subject to change across nvCOMP releases); the
 binding is pinned to ``nvidia-libnvcomp-cu12 == 5.2.0.13``.
 """
 
-from __future__ import annotations
-
 import ctypes
 import struct
 from dataclasses import dataclass

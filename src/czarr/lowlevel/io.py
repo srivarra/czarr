@@ -13,19 +13,13 @@ works on compat-hostile nodes.  Store data must live on a real
 filesystem — cuFile cannot read tmpfs (/tmp), see the Bruno notes.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 import cupy as cp
 import numpy as np
 from cuda.bindings.cufile import cuFileError
 
 from czarr import cufile
 from czarr._nvtx import nvtx_range
-
-if TYPE_CHECKING:
-    from czarr.lowlevel.plan import ReadRequest
+from czarr.lowlevel.plan import ReadRequest
 
 
 def read(requests: list[ReadRequest], *, max_workers: int | None = None) -> list[cp.ndarray]:

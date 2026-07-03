@@ -1,16 +1,13 @@
 """Zlib — RFC 1950 wrapper around nvCOMP raw deflate."""
 
-from __future__ import annotations
-
 import struct
 import zlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
+
+from zarr.core.common import JSON
 
 from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind
-
-if TYPE_CHECKING:
-    from zarr.core.common import JSON
 
 
 @dataclass(frozen=True)

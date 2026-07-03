@@ -11,8 +11,6 @@ to compile on sm_90 and shuffle is not a read-path bottleneck; re-add as
 a cupy RawKernel if a filter sweep ever shows it mattering.
 """
 
-from __future__ import annotations
-
 import cupy as cp
 
 

@@ -12,8 +12,6 @@ Usage::
         uv run --extra cu12 python -m bench.buffer.profile_h200
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import time

@@ -11,8 +11,6 @@ nonzero mask; this checks a given GPU (e.g. RTX PRO 6000 / GB202) directly.
 Run: module load cuda/13.1.0_590.44.01 && uv run --extra cu12 python -m bench.de_probe
 """
 
-from __future__ import annotations
-
 import cupy as cp
 from cuda.bindings import driver as cuda
 

@@ -11,8 +11,6 @@ Three tools, three jobs — none replaces the wall-clock harness:
   with the cuda module); a no-op stub is returned if Nsight Python is absent.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any

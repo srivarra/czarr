@@ -1,7 +1,5 @@
 """Tests for the opt-in ``czarr.core.buffer`` prototype classes."""
 
-from __future__ import annotations
-
 import cupy as cp
 import numpy as np
 import pytest

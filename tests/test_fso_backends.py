@@ -5,8 +5,6 @@ Parallels the Delta and Shuffle backend tests.  FSO supports both
 (cuda.compute make_unary_transform).
 """
 
-from __future__ import annotations
-
 import importlib
 
 import pytest

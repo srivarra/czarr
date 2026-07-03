@@ -9,8 +9,6 @@ Also: try opening the same store through zarr with czarr's Zstd
 registered under "zstd" to see if the swap works transparently.
 """
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 

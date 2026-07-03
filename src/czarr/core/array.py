@@ -15,19 +15,15 @@ methods run the sync path in a worker thread (``asyncio.to_thread``),
 composing with zarr-python's event loop without new I/O machinery.
 """
 
-from __future__ import annotations
-
 import asyncio
-from typing import TYPE_CHECKING, Any, TypedDict, Unpack
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, Self, TypedDict, Unpack
+
+import cupy as cp
+import numpy as np
 
 from czarr.lowlevel.plan import DecodePlan, open_plan, plan_from_metadata
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-    from pathlib import Path
-
-    import cupy as cp
-    import numpy as np
 
 
 class ReadOptions(TypedDict, total=False):
@@ -56,15 +52,15 @@ class Array:
     # construction
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def open(root: str | Path) -> Array:
+    @classmethod
+    def open(cls, root: str | Path) -> Self:
         """Open the array at ``root`` — one ``zarr.json`` read, no other I/O."""
-        return Array(open_plan(root))
+        return cls(open_plan(root))
 
-    @staticmethod
-    def from_metadata(metadata: dict[str, Any], root: str | Path) -> Array:
+    @classmethod
+    def from_metadata(cls, metadata: dict[str, Any], root: str | Path) -> Self:
         """Open with caller-supplied metadata (no I/O at all)."""
-        return Array(plan_from_metadata(metadata, root))
+        return cls(plan_from_metadata(metadata, root))
 
     # ------------------------------------------------------------------
     # metadata
@@ -172,10 +168,10 @@ class AsyncArray:
     def __init__(self, plan: DecodePlan) -> None:
         self._array = Array(plan)
 
-    @staticmethod
-    def open(root: str | Path) -> AsyncArray:
+    @classmethod
+    def open(cls, root: str | Path) -> Self:
         """Open the array at ``root`` (metadata read happens synchronously)."""
-        return AsyncArray(open_plan(root))
+        return cls(open_plan(root))
 
     @property
     def array(self) -> Array:

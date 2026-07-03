@@ -1,7 +1,5 @@
 """Round-trip + Zarr-integration tests for nvCOMP-backed codecs."""
 
-from __future__ import annotations
-
 import cupy as cp
 import numpy as np
 import pytest

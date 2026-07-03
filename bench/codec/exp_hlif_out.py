@@ -14,8 +14,6 @@ Run:
     uv run --extra cu12 --group test python -m bench.codec.exp_hlif_out
 """
 
-from __future__ import annotations
-
 import statistics
 import warnings
 

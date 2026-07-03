@@ -5,8 +5,6 @@ new file.  Importing :mod:`czarr.bench.benches` fires the decorators so the
 registry is populated by the time the CLI reads it.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any

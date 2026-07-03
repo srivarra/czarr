@@ -18,9 +18,8 @@ Zarr code that consumes CAI can wrap the buffer zero-copy without going
 through the cupy view first.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Literal, cast
+from collections.abc import Iterable
+from typing import Any, Literal, Self, cast
 
 import cupy as cp
 import numpy as np
@@ -28,13 +27,8 @@ import numpy.typing as npt
 from zarr.core.buffer import core
 from zarr.core.buffer import gpu as gpu_buffer
 from zarr.core.buffer.core import ArrayLike, BufferPrototype, NDArrayLike
+from zarr.core.common import BytesLike
 from zarr.registry import register_buffer, register_ndbuffer
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import Self
-
-    from zarr.core.common import BytesLike
 
 
 class CzarrGpuBuffer(core.Buffer):

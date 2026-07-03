@@ -5,8 +5,6 @@ read tmpfs, so ``tmp_path`` (usually /tmp) is off-limits for the read
 tests.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 import zarr

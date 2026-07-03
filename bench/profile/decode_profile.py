@@ -19,8 +19,6 @@ Run under nsys (see ``bench/run_decode_profile.sbatch``)::
         -o decode python bench/profile/decode_profile.py --rmm-gb 4 ...
 """
 
-from __future__ import annotations
-
 import argparse
 import time
 from pathlib import Path
