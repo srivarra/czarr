@@ -3,6 +3,6 @@
 Add a module here and import it below to register its benches.
 """
 
-from . import blosc, read_path
+from . import blosc, read_path, zarr_read
 
-__all__ = ["blosc", "read_path"]
+__all__ = ["blosc", "read_path", "zarr_read"]

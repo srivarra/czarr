@@ -35,7 +35,9 @@ for CAND in "/local/scratch/$USER" /local/scratch "/hpc/mydata/$USER/.czarr-benc
 done
 echo "TMPDIR=$TMPDIR"; df -T "$TMPDIR" | sed 's/^/  /'; echo
 
-RUN=(uv run --extra cu12 --extra bench)
+# UV_WITH adds ad-hoc packages, e.g. UV_WITH=kvikio-cu12 for the zarr-read
+# kvikio baseline arm (a bench-only comparison target, not a dependency).
+RUN=(uv run --extra cu12 --extra bench ${UV_WITH:+--with "$UV_WITH"})
 if [[ "${NSYS:-0}" == "1" ]]; then
   # Capture only the cudaProfilerStart/Stop window the harness brackets.
   PREFIX=(nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \

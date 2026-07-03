@@ -16,6 +16,8 @@ fall back to a POSIX bounce internally or assert (use --isolate). ``gds_availabl
 is recorded per row.
 """
 
+import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -76,6 +78,13 @@ def read_path(ctx: BenchContext):
     regime = {"chunk_mib": chunk_mib, "n_chunks": n_chunks, "impl": impl, "gds_available": False}
 
     if impl == "gds":
+        # Knob sweep hook (bench/run_cufile_sweep.sbatch): libcufile reads its
+        # config once at driver_open, so knobs must land before the first
+        # cuFile call — one process per combo.
+        knobs = json.loads(os.environ.get("CZARR_CUFILE_KNOBS", "{}"))
+        if knobs:
+            cufile.configure(**knobs)
+            regime["cufile_knobs"] = knobs
         cufile.ensure_driver_open()
         regime["gds_available"] = bool(cufile.is_available())
         base = int(dev.data.ptr)
