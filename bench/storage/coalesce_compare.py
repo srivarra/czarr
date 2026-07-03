@@ -28,7 +28,7 @@ from pathlib import Path
 import cupy as cp
 import numpy as np
 
-from czarr.storage import cufile_runtime
+from czarr import cufile as cufile_runtime
 from czarr.storage._coalesce import ByteRange, coalesce_ranges
 
 

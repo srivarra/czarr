@@ -28,8 +28,8 @@ from zarr.codecs import BloscCodec, BloscShuffle
 from zarr.storage import LocalStore
 
 import czarr
-from czarr.codecs._native.blosc_nvcomp import decode_blosc_batch
-from czarr.storage import cufile_runtime
+from czarr import cufile as cufile_runtime
+from czarr.codecs._backends.blosc_nvcomp import decode_blosc_batch
 
 REPS, WARMUP = 5, 2
 

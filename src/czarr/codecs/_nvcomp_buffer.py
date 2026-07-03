@@ -1,4 +1,4 @@
-"""Conversions between Zarr ``Buffer`` and ``nvcomp.Array``."""
+"""Conversions between Zarr ``Buffer``, device arrays, and ``nvcomp.Array``."""
 
 from __future__ import annotations
 
@@ -7,18 +7,11 @@ from typing import TYPE_CHECKING
 import cupy as cp
 import numpy as np
 from nvidia import nvcomp
-from zarr.core.buffer import gpu as gpu_buffer
 
-from czarr.core.buffer import CzarrGpuBuffer
+from czarr.core.buffer import is_gpu_prototype
 
 if TYPE_CHECKING:
     from zarr.core.buffer import Buffer, BufferPrototype
-
-
-def _is_gpu_prototype(prototype: BufferPrototype) -> bool:
-    """Return True when the prototype's Buffer class is a GPU Buffer."""
-    return issubclass(prototype.buffer, (gpu_buffer.Buffer, CzarrGpuBuffer))
-
 
 # nvCOMP's batched encode/decode kernels read with vector loads that need
 # at least 16-byte alignment of the source pointer.  RMM/cupy pools usually
@@ -60,8 +53,18 @@ def nvarray_to_buffer(nv: nvcomp.Array, prototype: BufferPrototype) -> Buffer:
     payload (via ``__cuda_array_interface__``). With a host prototype the bytes
     are downloaded with ``nv.cpu()`` and wrapped as the prototype's buffer.
     """
-    if _is_gpu_prototype(prototype):
+    if is_gpu_prototype(prototype):
         device = cp.asarray(nv).view(cp.uint8)
         return prototype.buffer.from_array_like(device)
     host = np.ascontiguousarray(np.asarray(nv.cpu())).view(np.uint8)
     return prototype.buffer.from_bytes(host.tobytes())
+
+
+def device_to_buffer(dev: cp.ndarray, prototype: BufferPrototype) -> Buffer:
+    """Wrap a decoded device array as a Zarr ``Buffer`` matching ``prototype``.
+
+    Zero-copy for GPU prototypes; D2H download + bytes copy for host ones.
+    """
+    if is_gpu_prototype(prototype):
+        return prototype.buffer.from_array_like(dev)
+    return prototype.buffer.from_bytes(cp.asnumpy(dev).tobytes())

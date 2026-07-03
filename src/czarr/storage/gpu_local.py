@@ -12,20 +12,15 @@ from zarr.core.buffer import default_buffer_prototype
 from zarr.core.buffer import gpu as gpu_buffer
 from zarr.storage import LocalStore
 
+from czarr import cufile
 from czarr._nvtx import nvtx_range
-from czarr.storage import cufile_runtime
+from czarr.core.buffer import is_gpu_prototype
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import Buffer, BufferPrototype
-
-
-def _gpu_prototype_requested(prototype: BufferPrototype) -> bool:
-    from czarr.core.buffer import CzarrGpuBuffer
-
-    return issubclass(prototype.buffer, (gpu_buffer.Buffer, CzarrGpuBuffer))
 
 
 def _resolve_byte_range(byte_range: ByteRequest | None, file_size: int) -> tuple[int, int]:
@@ -66,7 +61,7 @@ def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteReques
         return prototype.buffer.create_zero_length()
     with nvtx_range("czarr.GPULocalStore.cufile_read", size=size):
         dev = cp.empty(size, dtype=cp.uint8)
-        n = cufile_runtime.read_into(path, int(dev.data.ptr), size, offset)
+        n = cufile.read_into(path, int(dev.data.ptr), size, offset)
     if n != size:
         # Truncate to what was actually read; cuFile returns a short count
         # only at EOF or hardware error.
@@ -84,7 +79,7 @@ def _gds_set_sync(path: Path, value: Buffer) -> None:
         path.touch()
         return
     with nvtx_range("czarr.GPULocalStore.cufile_write", size=nbytes):
-        cufile_runtime.write_from(path, int(arr.data.ptr), nbytes, 0)
+        cufile.write_from(path, int(arr.data.ptr), nbytes, 0)
 
 
 class GPULocalStore(LocalStore):
@@ -102,7 +97,7 @@ class GPULocalStore(LocalStore):
         force_gpu: bool = False,
     ) -> None:
         super().__init__(root, read_only=read_only)
-        self._gds_available = cufile_runtime.is_available()
+        self._gds_available = cufile.is_available()
         if force_gpu and not self._gds_available:
             raise RuntimeError("cuFile is not available on this host but force_gpu=True was requested.")
 
@@ -122,7 +117,7 @@ class GPULocalStore(LocalStore):
             prototype = default_buffer_prototype()
         if not self._is_open:
             await self._open()
-        if not self._gds_available or not _gpu_prototype_requested(prototype):
+        if not self._gds_available or not is_gpu_prototype(prototype):
             return await super().get(key, prototype, byte_range)
         path = self.root / key
         try:
@@ -135,6 +130,8 @@ class GPULocalStore(LocalStore):
         self._check_writable()
         if not self._is_open:
             await self._open()
+        # Deliberately gpu.Buffer only (not is_gpu_buffer): switching would
+        # newly enable GDS writes for CzarrGpuBuffer values — separate change.
         if not self._gds_available or not isinstance(value, gpu_buffer.Buffer):
             await super().set(key, value)
             return

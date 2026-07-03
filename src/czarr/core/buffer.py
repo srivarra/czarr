@@ -32,6 +32,7 @@ from cuda.core import (
     VirtualMemoryResourceOptions,
 )
 from zarr.core.buffer import core
+from zarr.core.buffer import gpu as gpu_buffer
 from zarr.core.buffer.core import ArrayLike, BufferPrototype, NDArrayLike
 from zarr.registry import register_buffer, register_ndbuffer
 
@@ -298,3 +299,19 @@ buffer_prototype = BufferPrototype(buffer=CzarrGpuBuffer, nd_buffer=CzarrGpuNDBu
 
 register_buffer(CzarrGpuBuffer, qualname="czarr.core.buffer.CzarrGpuBuffer")
 register_ndbuffer(CzarrGpuNDBuffer, qualname="czarr.core.buffer.CzarrGpuNDBuffer")
+
+
+# Canonical "is this GPU-resident" predicate — CzarrGpuBuffer subclasses
+# zarr's core.Buffer, not gpu.Buffer, so a plain gpu.Buffer issubclass
+# check would miss it.  Import these instead of re-deriving the tuple.
+GPU_BUFFER_TYPES: tuple[type, ...] = (gpu_buffer.Buffer, CzarrGpuBuffer)
+
+
+def is_gpu_prototype(prototype: BufferPrototype) -> bool:
+    """True when ``prototype.buffer`` is a device-resident Buffer class."""
+    return issubclass(prototype.buffer, GPU_BUFFER_TYPES)
+
+
+def is_gpu_buffer(obj: object) -> bool:
+    """True when ``obj`` is a device-resident Buffer instance."""
+    return isinstance(obj, GPU_BUFFER_TYPES)

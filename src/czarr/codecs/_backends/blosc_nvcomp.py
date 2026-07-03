@@ -167,9 +167,9 @@ def _decode_subbatch(comps: list[cp.ndarray], stream: int) -> list[cp.ndarray]:
         if L.shuffle == "bit":
             bitunshuffle_into(scr, out, L.typesize, bs)
         elif L.shuffle == "byte":
-            from czarr.codecs.filters.shuffle import _byteunshuffle_cupy
+            from czarr.kernels.byteshuffle import byteunshuffle
 
-            out = _byteunshuffle_cupy(scr, L.typesize, bs)[: L.nbytes]
+            out = byteunshuffle(scr, L.typesize, bs)[: L.nbytes]
         else:  # none
             out = scr[: L.nbytes].copy()
         outs.append(out)

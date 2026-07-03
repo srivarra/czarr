@@ -76,7 +76,7 @@ class Delta(ArrayArrayCodec):
         arr = cp.asarray(chunk_data.as_ndarray_like())
         flat = arr.ravel()
         if self.backend == "cccl":
-            from czarr.codecs._native.delta import decode_delta_native
+            from czarr.codecs._backends.delta import decode_delta_native
 
             # cuda.compute scan needs the working dtype; cast if astype
             # narrowed the encoded values.  numcodecs preserves source

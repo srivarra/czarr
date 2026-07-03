@@ -23,6 +23,7 @@ import cupy as cp
 from zarr.abc.codec import BytesBytesCodec
 
 from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
+from czarr.kernels.byteshuffle import byteshuffle, byteunshuffle
 
 if TYPE_CHECKING:
     from zarr.core.array_spec import ArraySpec
@@ -63,13 +64,13 @@ class Shuffle(BytesBytesCodec):
     async def _decode_single(self, chunk_data: Buffer, chunk_spec: ArraySpec) -> Buffer:
         arr = chunk_data.as_array_like()
         cp_arr = cp.asarray(arr).view(cp.uint8) if not isinstance(arr, cp.ndarray) else arr.view(cp.uint8)
-        out = _byteunshuffle_cupy(cp_arr, self.elementsize, cp_arr.size)
+        out = byteunshuffle(cp_arr, self.elementsize, cp_arr.size)
         return chunk_spec.prototype.buffer.from_array_like(out)
 
     async def _encode_single(self, chunk_data: Buffer, chunk_spec: ArraySpec) -> Buffer:
         arr = chunk_data.as_array_like()
         cp_arr = cp.asarray(arr).view(cp.uint8) if not isinstance(arr, cp.ndarray) else arr.view(cp.uint8)
-        out = _byteshuffle_cupy(cp_arr, self.elementsize, cp_arr.size)
+        out = byteshuffle(cp_arr, self.elementsize, cp_arr.size)
         return chunk_spec.prototype.buffer.from_array_like(out)
 
     def compute_encoded_size(self, input_byte_length: int, _chunk_spec: ArraySpec) -> int:
@@ -96,22 +97,3 @@ class Shuffle(BytesBytesCodec):
         cfg = dict(data.get("configuration", {k: v for k, v in data.items() if k != "name"}))
         cfg.pop("backend", None)
         return cls(**cfg)
-
-
-def _byteunshuffle_cupy(packed: cp.ndarray, typesize: int, blocksize: int) -> cp.ndarray:
-    """Pure cupy byteunshuffle — reshape + transpose + ascontiguousarray."""
-    if packed.size % blocksize != 0:
-        raise ValueError(f"byteunshuffle: input {packed.size} not a multiple of blocksize {blocksize}")
-    nblocks = packed.size // blocksize
-    nelem = blocksize // typesize
-    # Each block has typesize planes of nelem bytes; interleave them.
-    return cp.ascontiguousarray(packed.reshape(nblocks, typesize, nelem).transpose(0, 2, 1)).ravel()
-
-
-def _byteshuffle_cupy(raw: cp.ndarray, typesize: int, blocksize: int) -> cp.ndarray:
-    """Pure cupy byteshuffle — inverse of :func:`_byteunshuffle_cupy`."""
-    if raw.size % blocksize != 0:
-        raise ValueError(f"byteshuffle: input {raw.size} not a multiple of blocksize {blocksize}")
-    nblocks = raw.size // blocksize
-    nelem = blocksize // typesize
-    return cp.ascontiguousarray(raw.reshape(nblocks, nelem, typesize).transpose(0, 2, 1)).ravel()

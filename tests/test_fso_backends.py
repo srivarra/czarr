@@ -128,12 +128,12 @@ class TestConfigureGpuOverrides:
 
 
 class TestNativeModuleLoads:
-    """Smoke test: ``_native.fixedscaleoffset`` imports + exposes the API.
+    """Smoke test: ``_backends.fixedscaleoffset`` imports + exposes the API.
 
     Real kernel-execution coverage lives on a GPU node with cccl.
     """
 
     def test_module_imports(self) -> None:
-        mod = importlib.import_module("czarr.codecs._native.fixedscaleoffset")
+        mod = importlib.import_module("czarr.codecs._backends.fixedscaleoffset")
         assert hasattr(mod, "decode_fso_native")
         assert hasattr(mod, "encode_fso_native")

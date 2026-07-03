@@ -15,7 +15,7 @@ from typing import Any
 import cupy as cp
 import numpy as np
 
-from czarr.codecs._native import import_cccl
+from czarr.codecs._backends import import_cccl
 
 # (dtype) → cached cuda.compute scanner.  Per-dtype because the scanner
 # closes over the operator's typed lambda — different dtypes need

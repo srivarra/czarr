@@ -22,7 +22,7 @@ import os
 
 import cupy as cp
 
-from czarr.storage import cufile_runtime
+from czarr import cufile as cufile_runtime
 
 _CHUNK = "/hpc/projects/waveorder/tile-stitch/sample_datasets/l0_brightfield_fov.zarr/0/c/0/0/9/0/0"
 _SEG = 16 << 20  # max_direct_io_size default

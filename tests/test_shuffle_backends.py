@@ -101,15 +101,15 @@ class TestMetadataRoundTrip:
 @pytest.mark.parametrize("typesize", [2, 4, 8])
 def test_cupy_byteshuffle_round_trip(typesize: int) -> None:
     cp = pytest.importorskip("cupy")
-    from czarr.codecs.filters.shuffle import _byteshuffle_cupy, _byteunshuffle_cupy
+    from czarr.kernels.byteshuffle import byteshuffle, byteunshuffle
 
     nblocks = 4
     nelem = 64
     blocksize = nelem * typesize
     raw = cp.arange(nblocks * blocksize, dtype=cp.uint8)
 
-    shuffled = _byteshuffle_cupy(raw, typesize, blocksize)
-    unshuffled = _byteunshuffle_cupy(shuffled, typesize, blocksize)
+    shuffled = byteshuffle(raw, typesize, blocksize)
+    unshuffled = byteunshuffle(shuffled, typesize, blocksize)
     assert bool((unshuffled == raw).all())
 
 

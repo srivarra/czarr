@@ -19,8 +19,8 @@ import cupy as cp
 import numpy as np
 from cuda.bindings import cufile
 
-from czarr.storage import cufile_runtime
-from czarr.storage.cufile_runtime import _CUfileDescr
+from czarr import cufile as cufile_runtime
+from czarr.cufile import _CUfileDescr
 
 N_FILES = 2048
 CHUNK_BYTES = 32 * 1024

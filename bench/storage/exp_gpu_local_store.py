@@ -138,7 +138,7 @@ def main() -> None:
     print(f"# Repeats: {REPEATS} (median)")
 
     # Verify cuFile is available
-    from czarr.storage import cufile_runtime
+    from czarr import cufile as cufile_runtime
 
     print(f"# cuFile available: {cufile_runtime.is_available()}")
     print()

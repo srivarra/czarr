@@ -4,7 +4,7 @@ Shadows zarr's CPU ``BloscCodec`` (codec id ``"blosc"``) when opted in via
 :func:`czarr.configure_gpu`, so existing blosc-compressed OME-Zarr stores
 decode on the GPU.  Decode-only: the on-GPU path is the
 fanout + native batched zstd + unshuffle pipeline in
-:mod:`czarr.codecs._native.blosc_nvcomp` (10-15x over CPU blosc + H2D).
+:mod:`czarr.codecs._backends.blosc_nvcomp` (10-15x over CPU blosc + H2D).
 
 Encoding raises — to produce GPU-decodable output, write ``[Shuffle, Zstd]``
 large-chunk instead (matches blosc's ratio within ~2%, no blosc container).
@@ -19,7 +19,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import cupy as cp
 import numpy as np
 
-from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind, _is_gpu_buffer, _is_gpu_prototype
+from czarr.codecs._nvcomp_buffer import device_to_buffer
+from czarr.codecs.base import CudaBytesBytesCodec, _Algorithm, _BitstreamKind
+from czarr.core.buffer import is_gpu_buffer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -52,14 +54,14 @@ class Blosc(CudaBytesBytesCodec):
     blocksize: int = 0
 
     def _decode_sync(self, items: list[tuple[Buffer | None, ArraySpec]]) -> list[Buffer | None]:
-        from czarr.codecs._native.blosc_nvcomp import decode_blosc_batch
+        from czarr.codecs._backends.blosc_nvcomp import decode_blosc_batch
 
         out: list[Buffer | None] = [None] * len(items)
         idx, comps, specs = [], [], []
         for i, (chunk, spec) in enumerate(items):
             if chunk is None:
                 continue
-            if _is_gpu_buffer(chunk):
+            if is_gpu_buffer(chunk):
                 comp = cp.asarray(chunk.as_array_like()).view(cp.uint8)
             else:
                 comp = cp.asarray(np.frombuffer(chunk.to_bytes(), dtype=np.uint8))
@@ -71,10 +73,7 @@ class Blosc(CudaBytesBytesCodec):
         stream = self._resolve_stream(self.cuda_stream) or 0
         decoded = decode_blosc_batch(comps, stream)
         for i, dev, spec in zip(idx, decoded, specs, strict=True):
-            if _is_gpu_prototype(spec.prototype):
-                out[i] = spec.prototype.buffer.from_array_like(dev)
-            else:
-                out[i] = spec.prototype.buffer.from_bytes(cp.asnumpy(dev).tobytes())
+            out[i] = device_to_buffer(dev, spec.prototype)
         return out
 
     async def decode(self, chunks_and_specs: Iterable[tuple[Buffer | None, ArraySpec]]) -> Iterable[Buffer | None]:

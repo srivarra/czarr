@@ -95,7 +95,7 @@ class FixedScaleOffset(ArrayArrayCodec):
         q = cp.asarray(chunk_data.as_ndarray_like())
         flat = q.ravel()
         if self.backend == "cccl":
-            from czarr.codecs._native.fixedscaleoffset import decode_fso_native
+            from czarr.codecs._backends.fixedscaleoffset import decode_fso_native
 
             x_flat = decode_fso_native(flat, dtype=self.dtype, scale=self.scale, offset=self.offset)
         else:
@@ -106,7 +106,7 @@ class FixedScaleOffset(ArrayArrayCodec):
         x = cp.asarray(chunk_data.as_ndarray_like())
         flat = x.ravel()
         if self.backend == "cccl":
-            from czarr.codecs._native.fixedscaleoffset import encode_fso_native
+            from czarr.codecs._backends.fixedscaleoffset import encode_fso_native
 
             q_flat = encode_fso_native(flat, astype=self._store_dtype, scale=self.scale, offset=self.offset)
         else:

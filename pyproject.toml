@@ -78,7 +78,7 @@ urls.Source = "https://github.com/srivarra/czarr"
 "czarr.snappy"   = "czarr.codecs.compressors.native:Snappy"
 
 [project.entry-points."zarr.codec_pipeline"]
-"czarr.pipeline" = "czarr.pipeline.pipeline:CzarrPipeline"
+"czarr.pipeline" = "czarr.pipeline:CzarrPipeline"
 
 # Unified benchmark CLI. Needs the `bench` extra (typer) installed; the
 # Nsight/telemetry deps ride along with the cu12/cu13 extra.

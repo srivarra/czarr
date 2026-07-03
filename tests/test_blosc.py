@@ -69,7 +69,7 @@ def test_blosc_encode_rejected():
 @pytest.mark.skipif(not os.path.exists(_REAL_CHUNK), reason="waveorder dataset not present")
 def test_engine_real_chunk_bit_exact():
     """The native engine decodes a real 256 MiB / 8192-block chunk bit-exact."""
-    from czarr.codecs._native.blosc_nvcomp import decode_blosc_batch
+    from czarr.codecs._backends.blosc_nvcomp import decode_blosc_batch
 
     buf = open(_REAL_CHUNK, "rb").read()
     nbytes, blocksize, _ = struct.unpack_from("<iii", buf, 4)
@@ -85,7 +85,7 @@ def test_engine_multichunk_batch():
     """Cross-chunk batched decode stays bit-exact across several real chunks."""
     import glob
 
-    from czarr.codecs._native.blosc_nvcomp import decode_blosc_batch
+    from czarr.codecs._backends.blosc_nvcomp import decode_blosc_batch
 
     files = sorted(glob.glob(os.path.dirname(_REAL_CHUNK) + "/*"))[:4]
     bufs = [open(f, "rb").read() for f in files]

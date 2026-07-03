@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 
 import cupy as cp
 
+from czarr import cufile
 from czarr.core.buffer import _current_stream, _device_mr
 
 if TYPE_CHECKING:
@@ -140,9 +141,7 @@ class CuFileSlabPool:
         if not self._register_requested:
             return False
         if self._cufile_ready is None:
-            from czarr.storage import cufile_runtime
-
-            self._cufile_ready = cufile_runtime.is_available()
+            self._cufile_ready = cufile.is_available()
         return self._cufile_ready
 
     # ------------------------------------------------------------------
@@ -156,9 +155,7 @@ class CuFileSlabPool:
         base = int(view.data.ptr)
         registered = False
         if self._should_register():
-            from czarr.storage import cufile_runtime
-
-            cufile_runtime.ensure_buf_registered(base, size)
+            cufile.ensure_buf_registered(base, size)
             registered = True
         slab = _Slab(
             cuda_buffer=cuda_buf,
@@ -267,11 +264,9 @@ class CuFileSlabPool:
         """
         with self._lock:
             if self._cufile_ready:
-                from czarr.storage import cufile_runtime
-
                 for slab in self._slabs:
                     if slab.registered:
-                        cufile_runtime.deregister_buf(slab.base_ptr)
+                        cufile.deregister_buf(slab.base_ptr)
             self._slabs.clear()
 
 

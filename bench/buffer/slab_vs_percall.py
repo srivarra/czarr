@@ -38,8 +38,8 @@ import cupy as cp
 import numpy as np
 from cuda.core import Device, VirtualMemoryResource, VirtualMemoryResourceOptions
 
+from czarr import cufile as cufile_runtime
 from czarr.core.slab import CuFileSlabPool
-from czarr.storage import cufile_runtime
 
 
 def _build_shard(path: Path, *, n_chunks: int, chunk_bytes: int) -> list[tuple[int, int]]:

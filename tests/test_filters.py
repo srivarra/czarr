@@ -51,12 +51,12 @@ class TestShuffle:
 
     def test_shuffle_matches_numcodecs_bitstream(self):
         """czarr.Shuffle encode bytes should match numcodecs.Shuffle byte-for-byte."""
-        from czarr.codecs.filters.shuffle import _byteshuffle_cupy
+        from czarr.kernels.byteshuffle import byteshuffle
 
         rng = np.random.default_rng(1)
         data = rng.integers(0, 65535, size=128, dtype=np.uint16)
         cpu_encoded = numcodecs.Shuffle(elementsize=2).encode(data)
-        gpu_bytes = _byteshuffle_cupy(cp.asarray(data).view(cp.uint8), 2, data.nbytes)
+        gpu_bytes = byteshuffle(cp.asarray(data).view(cp.uint8), 2, data.nbytes)
         np.testing.assert_array_equal(cp.asnumpy(gpu_bytes), np.asarray(cpu_encoded))
 
 

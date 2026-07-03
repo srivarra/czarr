@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 import zarr
 
-from czarr import LZ4
-from czarr.storage import GPULocalStore, cufile_runtime
+from czarr import LZ4, cufile
+from czarr.storage import GPULocalStore
 
 
 def test_gpu_local_store_roundtrip_via_zarr(gpustore_tmpdir):
@@ -81,20 +81,20 @@ def test_arr_getitem_drives_cufile(gpustore_tmpdir):
 
         # Multi-chunk reads fan out to per-chunk read_into via zarr's
         # concurrent_map; trace it to prove cuFile actually served the read.
-        orig_into = cufile_runtime.read_into
+        orig_into = cufile.read_into
         calls: list[int] = []
 
         def _traced_into(path, dev_ptr, size, file_offset=0):
             calls.append(size)
             return orig_into(path, dev_ptr, size, file_offset)
 
-        cufile_runtime.read_into = _traced_into
+        cufile.read_into = _traced_into
         try:
             store_r = GPULocalStore(gpustore_tmpdir, read_only=True)
             arr_r = zarr.open_array(store=store_r, mode="r")
             out = arr_r[2:6]  # 4 chunks
         finally:
-            cufile_runtime.read_into = orig_into
+            cufile.read_into = orig_into
     finally:
         zarr.config.reset()
 
@@ -104,8 +104,8 @@ def test_arr_getitem_drives_cufile(gpustore_tmpdir):
 
 def test_set_poll_mode_toggles_without_error():
     """``set_poll_mode`` should be idempotent and not crash regardless of fs type."""
-    if not cufile_runtime.is_available():
+    if not cufile.is_available():
         pytest.skip("cuFile not available on this host")
     # Toggle on then off — both must return cleanly.
-    cufile_runtime.set_poll_mode(True, threshold_kb=4)
-    cufile_runtime.set_poll_mode(False, threshold_kb=4)
+    cufile.set_poll_mode(True, threshold_kb=4)
+    cufile.set_poll_mode(False, threshold_kb=4)

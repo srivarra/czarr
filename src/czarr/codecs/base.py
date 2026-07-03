@@ -29,19 +29,18 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import cupy as cp
 from nvidia import nvcomp
 from zarr.abc.codec import BytesBytesCodec
-from zarr.core.buffer import gpu as gpu_buffer
 
-from czarr._buffer import buffer_to_nvarray, nvarray_to_buffer
 from czarr._nvtx import nvtx_range
 from czarr.alloc import register_nvcomp_allocator
-from czarr.core.buffer import CzarrGpuBuffer
+from czarr.codecs._nvcomp_buffer import buffer_to_nvarray, device_to_buffer, nvarray_to_buffer
+from czarr.core.buffer import is_gpu_buffer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import Self
 
     from zarr.core.array_spec import ArraySpec
-    from zarr.core.buffer import Buffer, BufferPrototype
+    from zarr.core.buffer import Buffer
     from zarr.core.common import JSON
 
 
@@ -107,17 +106,6 @@ _CHECKSUM_MAP: dict[Checksum, nvcomp.ChecksumPolicy] = {
     Checksum.COMPUTE_AND_VERIFY_IF_PRESENT: nvcomp.ChecksumPolicy.COMPUTE_AND_VERIFY_IF_PRESENT,
     Checksum.COMPUTE_AND_VERIFY: nvcomp.ChecksumPolicy.COMPUTE_AND_VERIFY,
 }
-
-
-_GPU_BUFFER_TYPES: tuple[type, ...] = (gpu_buffer.Buffer, CzarrGpuBuffer)
-
-
-def _is_gpu_prototype(prototype: BufferPrototype) -> bool:
-    return issubclass(prototype.buffer, _GPU_BUFFER_TYPES)
-
-
-def _is_gpu_buffer(chunk: object) -> bool:
-    return isinstance(chunk, _GPU_BUFFER_TYPES)
 
 
 @dataclass(frozen=True)
@@ -296,7 +284,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
                 #   simple until profiling shows it's the bottleneck.
                 nv_inputs: list[nvcomp.Array] = []
                 for chunk in originals:
-                    if _is_gpu_buffer(chunk):
+                    if is_gpu_buffer(chunk):
                         cp_arr = cp.asarray(chunk.as_array_like()).view(cp.uint8)
                         if self._frame_strip_head or self._frame_strip_tail:
                             end = cp_arr.size - self._frame_strip_tail if self._frame_strip_tail else cp_arr.size
@@ -312,10 +300,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
                     codec.decode(nv_inputs, out=decode_outs)
                 with nvtx_range("czarr.codec.wrap_outputs"):
                     for idx, dev, spec in zip(non_null_indices, decode_outs, specs, strict=True):
-                        if _is_gpu_prototype(spec.prototype):
-                            out[idx] = spec.prototype.buffer.from_array_like(dev)
-                        else:
-                            out[idx] = spec.prototype.buffer.from_bytes(cp.asnumpy(dev).tobytes())
+                        out[idx] = device_to_buffer(dev, spec.prototype)
                 return out
 
             # Encode

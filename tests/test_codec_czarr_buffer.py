@@ -7,7 +7,7 @@ hands to the codec. This avoids the zarr Array layer (whose
 ``__setitem__`` triggers cupy JIT on the CUDA 13 / CuPy cu12 cluster
 mismatch) while still verifying:
 
-* ``_is_gpu_buffer`` recognises ``CzarrGpuBuffer``,
+* ``is_gpu_buffer`` recognises ``CzarrGpuBuffer``,
 * the codec never falls through to the host-bytes slow path for a
   CzarrGpuBuffer input,
 * the decode output is wrapped back into the right prototype's
@@ -24,8 +24,14 @@ from zarr.core.array_spec import ArraySpec
 from zarr.core.buffer import BufferPrototype
 
 from czarr.codecs import LZ4, Zstd
-from czarr.codecs.base import _GPU_BUFFER_TYPES, _is_gpu_buffer, _is_gpu_prototype
-from czarr.core.buffer import CzarrGpuBuffer, CzarrGpuNDBuffer, buffer_prototype
+from czarr.core.buffer import (
+    GPU_BUFFER_TYPES,
+    CzarrGpuBuffer,
+    CzarrGpuNDBuffer,
+    buffer_prototype,
+    is_gpu_buffer,
+    is_gpu_prototype,
+)
 
 
 def _spec(shape: tuple[int, ...], dtype: str, prototype: BufferPrototype) -> ArraySpec:
@@ -41,14 +47,14 @@ def _spec(shape: tuple[int, ...], dtype: str, prototype: BufferPrototype) -> Arr
 def test_recognises_czarr_gpu_buffer_as_device() -> None:
     buf = CzarrGpuBuffer.empty(1024)
     try:
-        assert _is_gpu_buffer(buf)
-        assert CzarrGpuBuffer in _GPU_BUFFER_TYPES
+        assert is_gpu_buffer(buf)
+        assert CzarrGpuBuffer in GPU_BUFFER_TYPES
     finally:
         del buf
 
 
 def test_recognises_czarr_gpu_prototype() -> None:
-    assert _is_gpu_prototype(buffer_prototype)
+    assert is_gpu_prototype(buffer_prototype)
 
 
 @pytest.mark.parametrize("codec_cls", [LZ4, Zstd])

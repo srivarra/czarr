@@ -161,7 +161,7 @@ class TestConfigureGpuOverrides:
 
 
 class TestNativeModuleLoads:
-    """Smoke test: ``_native.delta`` imports + exposes the expected API.
+    """Smoke test: ``_backends.delta`` imports + exposes the expected API.
 
     Real kernel-execution coverage lives in
     ``.planning/research/cuda-array/spikes/delta_cuda_compute.py`` and
@@ -169,5 +169,5 @@ class TestNativeModuleLoads:
     """
 
     def test_module_imports(self) -> None:
-        mod = importlib.import_module("czarr.codecs._native.delta")
+        mod = importlib.import_module("czarr.codecs._backends.delta")
         assert hasattr(mod, "decode_delta_native")

@@ -24,10 +24,10 @@ import cupy as cp
 import cupyx
 import numpy as np
 
+from czarr import cufile
 from czarr.bench.context import BenchContext
 from czarr.bench.fixtures import real_fs_tmpdir
 from czarr.bench.registry import benchmark
-from czarr.storage import cufile_runtime
 
 
 def _write_raw(chunk_mib: int, n_chunks: int) -> tuple[list[str], list[int], bytes]:
@@ -77,13 +77,13 @@ def read_path(ctx: BenchContext):
     regime = {"chunk_mib": chunk_mib, "n_chunks": n_chunks, "impl": impl, "gds_available": False}
 
     if impl == "gds":
-        cufile_runtime.ensure_driver_open()
-        regime["gds_available"] = bool(cufile_runtime.is_available())
+        cufile.ensure_driver_open()
+        regime["gds_available"] = bool(cufile.is_available())
         base = int(dev.data.ptr)
-        cufile_runtime.ensure_buf_registered(base, total)
+        cufile.ensure_buf_registered(base, total)
 
         def body():
-            cufile_runtime.read_into_many([(paths[i], base + offsets[i], sizes[i], 0) for i in range(n_chunks)])
+            cufile.read_into_many([(paths[i], base + offsets[i], sizes[i], 0) for i in range(n_chunks)])
             ctx.sync()
             return dev
     elif impl == "bounce":

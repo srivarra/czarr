@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 import cupy as cp
 import numpy as np
 
-from czarr.codecs._native import import_cccl
+from czarr.codecs._backends import import_cccl
 
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike
