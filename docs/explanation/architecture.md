@@ -1,59 +1,56 @@
 # The two-tier architecture
 
-czarr's read machinery is deliberately split into two tiers that share one substrate. This page explains what each tier is for, how a read actually flows, and why the split exists.
+czarr has two public read APIs over one implementation. This page describes what each is for, how a read flows through the stages, and which alternatives were measured and rejected.
 
-## The problem shape
+## Why two APIs
 
-Zarr reads on a GPU machine have two distinct audiences:
+Zarr reads on a GPU machine serve two audiences with conflicting needs. Existing zarr code wants GPU speed with no code changes and the full zarr surface: writes, fancy indexing, groups, arbitrary codec chains. Performance-critical readers, such as training loops and services reading one array thousands of times, want metadata parsed once, per-call control over threads and memory, and no global state. One API cannot satisfy both, so czarr ships one for each and keeps them consistent.
 
-1. **Existing zarr code** — notebooks, pipelines, and libraries already written against `zarr.Array`. These want GPU speed with zero code changes, and they need the full zarr surface: writes, fancy indexing, groups, arbitrary codec chains.
-2. **Performance-critical readers** — training loops and services that read the same array thousands of times. These want to pay metadata parsing once, control threading and memory per call, and avoid global state entirely.
+## The explicit tier
 
-One API can't serve both without compromising one of them. So: two tiers.
-
-## Tier 2 — the explicit path
-
-`czarr.lowlevel` decomposes a read into three inspectable stages:
+`czarr.lowlevel` splits a read into three stages:
 
 ```
 zarr.json ──► DecodePlan ──► ranges(selection) ──► read() ──► decode() ──► cupy.ndarray
-              (parse once)    (coalesced byte      (threaded    (one batched
-                               ranges + chunk       cuFile       nvCOMP call
-                               mapping)             reads)       + scatter)
 ```
 
-- **`DecodePlan`** parses metadata exactly once and caches parsed shard indexes. It is host-only — no cupy import — so planning runs on login nodes and in CPU-only tests.
-- **`plan.ranges()`** maps a selection to chunks, resolves shard offsets, and fuses adjacent byte ranges into fewer, larger reads. With cuFile costing ~1 ms per call, fusing 32 inner-chunk reads into one is worth 22× on partial-shard reads.
-- **`lowlevel.read()`** issues the fused reads through a threadpool of blocking cuFile calls (the GIL is released; parallel submission is the only lever that matters — measured, not assumed).
-- **`lowlevel.decode()`** runs one batched nvCOMP call for all chunks, applies shuffle kernels, and scatters into the output array, filling missing chunks.
+`DecodePlan` parses metadata once and caches parsed shard indexes. It does not import cupy, so plans build on hosts without a GPU. `plan.ranges()` maps a selection to chunks, resolves shard offsets, and fuses adjacent byte ranges: with cuFile costing about 1 ms per call, fusing 32 inner-chunk reads into one reduced a partial-shard read from 26.5 ms to 1.2 ms on H100. `lowlevel.read()` issues the fused reads through a threadpool of blocking cuFile calls. `lowlevel.decode()` decompresses every chunk in one batched nvCOMP call, applies shuffle kernels, and scatters into the output.
 
-`czarr.core.Array` / `AsyncArray` wrap these stages in an object with plain-property metadata and `retrieve_*` methods. Knobs travel per call in a `ReadOptions` dict — nothing global.
+`czarr.core.Array` and `AsyncArray` wrap the stages in an object with property metadata and `retrieve_*` methods. Options travel per call; the async variant runs the sync path in worker threads.
 
-## Tier 1 — the zarr-native path
+## The zarr tier
 
-`configure_gpu()` works entirely through zarr's public extension points: codecs registered under the same names as their CPU equivalents, GPU buffer prototypes, a batched codec pipeline, and a coalescing override of the sharding codec. Stock zarr machinery does the orchestration; czarr supplies the GPU parts.
-
-This tier keeps everything zarr can do — writes, fancy indexing, groups, any codec chain — at the cost of zarr's per-read overhead and process-global configuration.
+`configure_gpu()` works entirely through zarr's extension points: codecs registered under the same names as their CPU equivalents, GPU buffer prototypes, a batched codec pipeline, and a coalescing replacement for the sharding codec. zarr's machinery does the orchestration. This tier keeps everything zarr can do, at the cost of zarr's per-read overhead and process-global configuration.
 
 ## The bridge
 
-`CudaZarrArray.__getitem__` connects the tiers:
+`CudaZarrArray.__getitem__` tries the explicit tier first and falls back to zarr:
 
 ```
 CudaZarrArray[sel]
-   ├─ basic indexing + supported codecs ──► cached core.Array (tier 2)
-   │                                        + squeeze int axes
-   └─ anything else ──────────────────────► zarr fallback (tier 1)
+   ├─ basic indexing, supported codecs ──► cached core.Array, int axes squeezed
+   └─ anything else ─────────────────────► zarr.Array.__getitem__
 ```
 
-The tier-2 plan is cached on the array keyed by metadata identity, so repeated reads skip re-parsing; writes drop the cache (a rewritten shard must not be read through stale indexes).
+The cached plan is keyed by metadata identity; writes drop it, because a rewritten shard must not be read through stale shard indexes.
 
-## What the measurements say
+## Measurements
 
-The H100 gate (`bench/results/zarr-read.jsonl`) keeps this design honest:
+From the H100 gate (`bench/results/zarr-read.jsonl`), blosc `[bitshuffle, zstd]` fixture:
 
-- **Tier-1 fast path ≈ lowlevel ≈ zarr pipeline** at 128-256 MiB chunks (~20 GiB/s). The explicit tier's value at bulk reads is the *API* — no global state, per-call control — not raw speed; bulk reads are storage-concurrency-bound whichever stack issues them.
-- **kvikio `GDSStore` is 10-13× slower** on the same fixture — GDS primitives alone don't make a fast zarr reader; batched decode and read coalescing do.
-- **GPU decode is 18-20× CPU** on blosc stores at real chunk sizes.
+- At 128-256 MiB chunks, the fast path, lowlevel, and the zarr pipeline all read at about 20 GiB/s, against a raw GDS transfer ceiling of 24.6 GiB/s. Bulk reads are storage-concurrency-bound in every stack; the explicit tier's value there is the API contract, not throughput.
+- kvikio `GDSStore` with GPU codecs reads the same fixture at 1.6-1.9 GiB/s. GDS primitives alone do not make a fast zarr reader; batching and coalescing do.
+- GPU decode is 18-20x CPU decode on this workload.
 
-Several designs were tried and benched *out*: per-stream decode overlap (wash), background prefetch threads (redundant with CUDA's async queue), cuFile's async/batch APIs (1.8-14× slower than threaded sync on our storage), register-once buffer pools (~5% slower than stock cupy). The surviving architecture is the simple one because the alternatives lost on hardware.
+## Rejected designs
+
+Each of these was implemented and benchmarked before removal; see git history for the implementations.
+
+| Design | Result |
+|---|---|
+| cuFile async and batch APIs | 1.8-14x slower than threaded sync on Bruno NFS |
+| Per-stream nvCOMP decode overlap | 0.99-1.02x, no effect |
+| Background prefetch threads | Redundant with CUDA's async queue for async consumers |
+| Register-once buffer pools | 5% slower than stock cupy allocation on real GDS |
+| Read/decode overlap within one read | Loses; reads are concurrency-bound and header parsing serializes |
+| cuFile knob tuning | No effect; `max_request_parallelism` clamps at 8 |

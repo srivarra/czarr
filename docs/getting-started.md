@@ -1,23 +1,19 @@
 # Getting started
 
-This tutorial takes you from a fresh environment to reading and writing a GPU-compressed Zarr array. You need a Linux machine with an NVIDIA GPU and either CUDA 12 or CUDA 13.
+This tutorial creates a GPU-compressed Zarr array, writes to it, and reads it back both through zarr and through the explicit API. It assumes a Linux machine with an NVIDIA GPU and CUDA 12 or 13.
 
-## 1. Install
+## Install
 
 ```bash
-pip install "czarr[cu12]"     # or czarr[cu13] to match your CUDA version
+pip install "czarr[cu12]"     # or czarr[cu13]
 ```
-
-Verify the install:
 
 ```python
 import czarr
 print(czarr.__version__)
 ```
 
-## 2. Configure the GPU path
-
-One call wires zarr up for GPU work — batched codec pipeline, GPU buffer prototypes, and codec registrations:
+## Configure zarr for the GPU
 
 ```python
 import czarr
@@ -25,9 +21,9 @@ import czarr
 czarr.configure_gpu()
 ```
 
-Everything after this point is ordinary zarr. `configure_gpu` also works as a context manager (`with czarr.configure_gpu(): ...`) when you want the prior zarr configuration restored on exit.
+This registers the GPU codecs, sets the batched decode pipeline, and switches zarr's buffer prototypes to device memory. It also works as a context manager, restoring the prior zarr configuration on exit.
 
-## 3. Create and write an array
+## Create and write
 
 ```python
 import cupy as cp
@@ -36,36 +32,36 @@ import numpy as np
 arr = czarr.create_cuda_array(
     store="quickstart.zarr",
     shape=(16, 1024, 1024),
-    chunks=(4, 1024, 1024),          # ~16 MiB chunks — GPU-friendly territory
+    chunks=(4, 1024, 1024),
     dtype="float32",
-    compressors=[czarr.ANS()],       # nvCOMP-native, the safe default
+    compressors=[czarr.ANS()],
 )
 
 data = np.random.default_rng(0).standard_normal((16, 1024, 1024), dtype="float32")
-arr[:] = data                        # accepts numpy or cupy
+arr[:] = data
 ```
 
-`create_cuda_array` wraps a string/`Path` store in [`GPULocalStore`][czarr.GPULocalStore] automatically, so reads go disk → GPU via cuFile where the system supports it.
+`create_cuda_array` wraps a string or `Path` store in [`GPULocalStore`][czarr.GPULocalStore], which reads disk to GPU through cuFile where the system supports it. Writes accept numpy or cupy.
 
-## 4. Read it back
+## Read
 
 ```python
-out = arr[:]                         # whole array
-print(type(out))                     # <class 'cupy.ndarray'> — it never touched the host
+out = arr[:]
+print(type(out))                     # <class 'cupy.ndarray'>
 
-plane = arr[3]                       # basic selections use the lowlevel fast path:
-tile = arr[2:6, 256:512, 256:512]    # coalesced reads, one batched nvCOMP decode
+plane = arr[3]
+tile = arr[2:6, 256:512, 256:512]
 ```
 
-Verify the round trip:
+Basic selections (integers, step-1 slices, `Ellipsis`) go through the lowlevel path: coalesced cuFile reads followed by one batched nvCOMP decode. Other selections go through zarr.
 
 ```python
 np.testing.assert_array_equal(cp.asnumpy(out), data)
 ```
 
-## 5. Same array, explicit tier
+## Read through the explicit API
 
-The identical store reads through [`czarr.core.Array`][czarr.core.Array] with no global configuration at all — useful in libraries and long-lived services that must not mutate zarr's process-wide state:
+The same store, without `configure_gpu` or any other global state:
 
 ```python
 from czarr.core import Array
@@ -73,11 +69,7 @@ from czarr.core import Array
 a = Array.open("quickstart.zarr")    # one zarr.json read
 print(a.shape, a.dtype, a.chunk_shape)
 
-out = a[2:6]                         # cupy.ndarray
+out = a[2:6]
 ```
 
-## Where next
-
-- Have existing CPU-written stores? → [GPU-decode existing stores](how-to/read-cpu-stores.md)
-- Want per-call tuning, async reads, or raw encoded bytes? → [Explicit reads](how-to/explicit-reads.md)
-- Setting up a GDS machine? → [GPUDirect Storage setup](how-to/gds.md)
+[Explicit reads](how-to/explicit-reads.md) covers per-call options, the async variant, and the individual pipeline stages. [GPUDirect Storage setup](how-to/gds.md) covers cuFile modes and diagnostics.

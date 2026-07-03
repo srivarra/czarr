@@ -1,47 +1,35 @@
 # Benchmarking with czarr-bench
 
-**Goal:** reproduce czarr's published numbers on your hardware, or measure a change before trusting it.
-
-Every performance claim in these docs comes from `czarr-bench`; results land as append-only JSON-lines in `bench/results/` and are tracked in git.
-
-## Install and list
+`czarr-bench` produced every number in these docs. Results append as JSON-lines to `bench/results/`, keyed by `(bench, params, gpu, commit)`, and are tracked in git.
 
 ```bash
-pip install "czarr[cu12,bench]"      # bench extra adds the typer CLI
+pip install "czarr[cu12,bench]"
 czarr-bench list
 ```
 
-## Run one bench
+## Running
 
 ```bash
 czarr-bench run zarr-read --param impl=lowlevel --param chunk_mib=128
 czarr-bench run read-path --param impl=gds --reps 10 --warmup 3
+czarr-bench sweep zarr-read          # the declared impl x chunk_mib grid
 ```
 
-Each bench validates bit-exactness against a CPU reference **before** timing — a fast-but-wrong result fails instead of reporting.
+Each bench validates its output against a CPU reference before timing; a wrong result fails instead of reporting. Sweeps run each parameter point in a child process, so an abort or a global-state mutation in one point cannot affect the rest.
 
-## Sweep the declared axes
+## Benches
 
-```bash
-czarr-bench sweep zarr-read          # impl x chunk_mib grid
-czarr-bench sweep read-path
-```
-
-Sweeps isolate each parameter point in a child process by default, so a C-level abort or global-state mutation (`configure_gpu`, cuFile driver config) can't poison the rest of the grid.
-
-## The benches
-
-| Bench | Question it answers |
+| Bench | Measures |
 |---|---|
-| `read-path` | Does cuFile/GDS beat pinned-bounce and pageable transfer on this storage? (decode excluded) |
-| `blosc-e2e` | End-to-end blosc store read: GPU decode vs CPU + H2D |
-| `zarr-read` | The four read stacks head-to-head: lowlevel vs tier-1 fast path vs zarr pipeline vs kvikio `GDSStore` |
+| `read-path` | Storage-to-GPU transfer only: cuFile GDS vs pinned bounce vs pageable |
+| `blosc-e2e` | End-to-end blosc store read, GPU decode vs CPU + H2D |
+| `zarr-read` | Full reads through lowlevel, the tier-1 fast path, the zarr pipeline, and kvikio `GDSStore` |
 
-The `zarr-read` kvikio arm needs kvikio installed (`uv run --with kvikio-cu12 czarr-bench ...`) — it is a comparison baseline, not a czarr dependency.
+The kvikio arm requires kvikio (`uv run --with kvikio-cu12 czarr-bench ...`); it is a comparison target, not a dependency.
 
 ## Profiling
 
-`--nsys` wraps the run in Nsight Systems (the harness brackets the timed region with `cudaProfilerStart/Stop`, and czarr's stages carry NVTX ranges):
+`--nsys` wraps the run in Nsight Systems. The harness brackets the timed region with `cudaProfilerStart/Stop`, and the pipeline stages carry NVTX ranges:
 
 ```bash
 czarr-bench run zarr-read --param impl=lowlevel --nsys
@@ -49,6 +37,5 @@ czarr-bench run zarr-read --param impl=lowlevel --nsys
 
 ## Pitfalls
 
-- **Never bench against tmpfs** — GDS reads return zeros from it. The bench fixtures refuse tmpfs and pick a real filesystem automatically, but a leaked `$TMPDIR` is the first thing to check when numbers look impossible.
-- **Real GDS vs compat mode** changes every conclusion; each result row records `gds_available`.
-- Results are keyed by `(bench, params, gpu, commit)` — diff them across commits with plain git tooling or pandas.
+- cuFile cannot read tmpfs. The fixtures detect and avoid it, but check `$TMPDIR` when numbers look impossible.
+- GDS versus compat mode changes every conclusion; each result row records `gds_available`.

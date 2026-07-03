@@ -1,53 +1,45 @@
-# GPU-decode existing CPU-written stores
+# GPU-decode existing CPU stores
 
-**Goal:** read a zarr store written with CPU codecs (numcodecs / `zarr.codecs`) on the GPU, without migrating or re-encoding anything.
+A zarr store written with CPU codecs (numcodecs or `zarr.codecs`) can be decoded on the GPU without migration or re-encoding.
 
 ## Zstd, LZ4, Gzip, Zlib
 
-czarr's compat codecs produce and consume byte streams bit-identical with libzstd / liblz4 / libdeflate / libz. After `configure_gpu()` they shadow the CPU codecs in zarr's registry, so the store's metadata resolves to the GPU implementations transparently:
+czarr's compat codecs consume and produce byte streams bit-identical with libzstd, liblz4, libdeflate, and libz. `configure_gpu()` registers them over the CPU codecs in zarr's registry, so a store's metadata resolves to the GPU implementations:
 
 ```python
 import czarr, zarr
 
 czarr.configure_gpu()
-arr = zarr.open_array("legacy_cpu_written.zarr")   # written years ago with numcodecs.Zstd
-out = arr[:]                                       # cupy.ndarray, GPU decoded
+arr = zarr.open_array("legacy_cpu_written.zarr")
+out = arr[:]                        # cupy.ndarray
 ```
 
-No store changes, no flags. Reverting is equally clean — use the context-manager form to scope it:
+To scope the registry changes, use the context-manager form:
 
 ```python
 with czarr.configure_gpu():
-    gpu_out = arr[:]        # GPU decode inside the block
-cpu_out = arr[:]            # stock zarr behavior restored
+    gpu_out = arr[:]
+cpu_out = arr[:]                    # prior zarr configuration restored
 ```
 
-## Blosc (bitshuffle/shuffle + zstd)
+## Blosc
 
-The common bioimaging layout — blosc containers with bitshuffle — decodes on the GPU through nvCOMP's native batched API plus czarr's shuffle kernels:
+Blosc containers with bitshuffle or byte shuffle, the common bioimaging layout, decode through nvCOMP's batched API plus czarr's shuffle kernels. The same `configure_gpu()` call covers them.
 
-```python
-czarr.configure_gpu()
-arr = zarr.open_array("waveorder_style_store.zarr")   # blosc [bitshuffle, zstd]
-out = arr[:]
-```
-
-!!! note "Blosc is decode-only"
-
-    czarr never encodes blosc containers. For new GPU-decodable data, write with `compressors=[czarr.Shuffle(...), czarr.Zstd()]` instead.
+czarr does not encode blosc containers. Write new GPU-decodable data with `compressors=[czarr.Shuffle(...), czarr.Zstd()]`.
 
 ## Sharded stores
 
-Nothing extra to do. `configure_gpu()` registers czarr's coalescing override for `sharding_indexed`, so partial-shard reads fuse adjacent inner chunks into single cuFile calls instead of zarr's one-`get`-per-chunk loop (22× on the H100 microbench for 32×64 KiB inner chunks).
+`configure_gpu()` registers a coalescing replacement for zarr's `sharding_indexed` codec. Partial-shard reads fuse adjacent inner chunks into single cuFile calls instead of zarr's one call per chunk. Measured on H100 with 32 x 64 KiB inner chunks: 26.5 ms to 1.2 ms per partial-shard read.
 
-## Pinning a codec backend
+## Codec backends
 
-Filter codecs (`Shuffle`, `Delta`, `FixedScaleOffset`) have interchangeable GPU implementations. The bitstream is identical either way; pin one per codec if profiling says so:
+The `Shuffle`, `Delta`, and `FixedScaleOffset` filters have more than one GPU implementation producing the same bitstream. To pin one:
 
 ```python
 czarr.configure_gpu(codec_backend_overrides={"shuffle": "cupy"})
 ```
 
-## What falls back
+## Fallback behavior
 
-Codec chains czarr has no GPU implementation for decode through zarr's normal CPU path — the read still works, it's just not GPU-accelerated. Check what a store uses with `zarr.open_array(...).metadata.codecs`.
+Codec chains without a czarr GPU implementation decode through zarr's normal CPU path. `zarr.open_array(...).metadata.codecs` shows what a store uses.
