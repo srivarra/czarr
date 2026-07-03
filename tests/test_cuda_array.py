@@ -6,6 +6,7 @@ not exercised here; real-GPU coverage lives in the storage/pipeline
 tests and the bench harness.
 """
 
+import cupy as cp
 import numpy as np
 import pytest
 import zarr
@@ -145,3 +146,79 @@ class TestFactories:
         # MemoryStore stays as MemoryStore; not autowrapped.
         assert arr.store_path.store is store
         assert isinstance(arr.store_path.store, MemoryStore)
+
+
+# ---------------------------------------------------------------------------
+# Lowlevel fast path (phase-4 step 5)
+# ---------------------------------------------------------------------------
+
+
+class TestFastPath:
+    """``__getitem__`` routes through czarr.core.Array when lowlevel can serve."""
+
+    @pytest.fixture
+    def disk_array(self, gpustore_tmpdir):
+        """(CudaZarrArray, ndarray) — default-zstd array on real disk."""
+        root = str(gpustore_tmpdir / "fast.zarr")
+        arr = zarr.create_array(store=root, shape=(8, 8, 8), chunks=(4, 4, 4), dtype="float32")
+        data = np.arange(512, dtype="float32").reshape(8, 8, 8)
+        arr[:] = data
+        return czarr.open_cuda_array(root), data
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            np.s_[:],
+            np.s_[1:5, :, 2:7],
+            np.s_[3],
+            np.s_[..., 2],
+            (2, slice(1, 3), 4),
+        ],
+    )
+    def test_returns_cupy_with_numpy_shape_semantics(self, disk_array, key) -> None:
+        cuda, data = disk_array
+        out = cuda[key]
+        # cupy result proves the fast path ran: configure_gpu was never
+        # called, so the zarr fallback would have produced numpy.
+        assert isinstance(out, cp.ndarray)
+        assert out.shape == np.shape(data[key])  # int axes squeezed
+        np.testing.assert_array_equal(cp.asnumpy(out), data[key])
+
+    def test_full_int_selection_is_zero_dim(self, disk_array) -> None:
+        cuda, data = disk_array
+        out = cuda[1, 2, 3]
+        assert isinstance(out, cp.ndarray)
+        assert out.shape == ()
+        assert float(out) == data[1, 2, 3]
+
+    def test_fancy_indexing_falls_back(self, disk_array) -> None:
+        cuda, data = disk_array
+        out = cuda[[0, 2]]
+        np.testing.assert_array_equal(np.asarray(out), data[[0, 2]])
+
+    def test_unsupported_codec_falls_back(self, gpustore_tmpdir) -> None:
+        root = str(gpustore_tmpdir / "gzip.zarr")
+        arr = zarr.create_array(
+            store=root,
+            shape=(8, 8),
+            chunks=(4, 4),
+            dtype="float32",
+            compressors=[zarr.codecs.GzipCodec()],
+        )
+        data = np.arange(64, dtype="float32").reshape(8, 8)
+        arr[:] = data
+        cuda = czarr.open_cuda_array(root)
+        np.testing.assert_array_equal(np.asarray(cuda[1:6, :]), data[1:6, :])
+
+    def test_memory_store_falls_back(self, small_array) -> None:
+        cuda = czarr.CudaZarrArray.wrap(small_array)
+        assert cuda._fast_array() is None
+        np.testing.assert_array_equal(np.asarray(cuda[2:5]), np.asarray(small_array[2:5]))
+
+    def test_write_invalidates_cached_plan(self, gpustore_tmpdir) -> None:
+        root = str(gpustore_tmpdir / "rw.zarr")
+        cuda = czarr.create_cuda_array(store=root, shape=(8, 8), chunks=(4, 4), dtype="float32")
+        cuda[:] = np.zeros((8, 8), dtype="float32")
+        assert float(cp.asnumpy(cuda[0, 0])) == 0.0  # populate the plan cache
+        cuda[0] = np.full(8, 7.0, dtype="float32")
+        np.testing.assert_array_equal(cp.asnumpy(cuda[0]), np.full(8, 7.0, dtype="float32"))
