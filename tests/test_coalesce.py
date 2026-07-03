@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from czarr.storage._coalesce import (
+from czarr.lowlevel.coalesce import (
     ByteRange,
     FusedRead,
     coalesce_ranges,

@@ -7,7 +7,7 @@ a-shard in a serial ``await`` loop — one ``byte_getter.get`` per chunk
 decode starts.
 
 This subclass collects all chunk byte slices, runs them through
-:func:`czarr.storage._coalesce.coalesce_ranges`, and issues fused
+:func:`czarr.lowlevel.coalesce.coalesce_ranges`, and issues fused
 reads — then slices per-chunk Buffer views out locally.
 
 Microbench on H100 (``bench/storage/coalesce_compare.py``):
@@ -34,7 +34,7 @@ from zarr.codecs.sharding import ShardingCodec, _ShardingByteGetter
 from zarr.core.chunk_grids import ChunkGrid
 from zarr.core.indexing import get_indexer
 
-from czarr.storage._coalesce import ByteRange, coalesce_ranges
+from czarr.lowlevel.coalesce import ByteRange, coalesce_ranges
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

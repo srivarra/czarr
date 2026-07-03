@@ -29,7 +29,7 @@ import cupy as cp
 import numpy as np
 
 from czarr import cufile as cufile_runtime
-from czarr.storage._coalesce import ByteRange, coalesce_ranges
+from czarr.lowlevel.coalesce import ByteRange, coalesce_ranges
 
 
 def _build_shard(path: Path, *, n_chunks: int, chunk_bytes: int) -> list[tuple[int, int]]:
