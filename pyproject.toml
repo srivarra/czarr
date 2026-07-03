@@ -98,18 +98,8 @@ test = [
 nb = [ "jupyterlab>=4.5.2" ]
 
 doc = [
-  "ipykernel",
-  "ipython",
-  "myst-nb>=1.1",
-  "pandas",
-  "sphinx>=8.1",
-  "sphinx-autodoc-typehints",
-  "sphinx-book-theme>=1",
-  "sphinx-copybutton",
-  "sphinx-tabs",
-  "sphinxcontrib-bibtex>=1",
-  "sphinxcontrib-katex",
-  "sphinxext-opengraph",
+  "mkdocstrings[python]>=0.30",
+  "zensical>=0.0.46",
 ]
 
 [tool.hatch.envs.default]
@@ -118,9 +108,13 @@ dependency-groups = [ "dev" ]
 
 [tool.hatch.envs.docs]
 dependency-groups = [ "doc" ]
-scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
-scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
-scripts.clean = "git clean -fdX -- {args:docs}"
+# mkdocstrings imports czarr to render the API reference, so the docs env
+# needs a CUDA extra (imports work without a GPU; kernels never launch).
+features = [ "cu12" ]
+scripts.build = "zensical build {args}"
+scripts.serve = "zensical serve {args}"
+scripts.open = "python -m webbrowser -t site/index.html"
+scripts.clean = "git clean -fdX -- site"
 
 # Test the lowest and highest supported Python versions with normal deps
 [[tool.hatch.envs.hatch-test.matrix]]
@@ -145,6 +139,8 @@ matrix.deps.env-vars = [
 ]
 
 [tool.uv]
+# doc included so `uv run zensical serve` works without --group juggling.
+default-groups = [ "dev", "doc" ]
 conflicts = [
   [
     { extra = "cu12" },

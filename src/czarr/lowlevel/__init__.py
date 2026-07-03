@@ -4,7 +4,8 @@ Design: ``.planning/lowlevel-api-design.md``.  Stages:
 
 * :mod:`czarr.lowlevel.plan` — derive-once metadata → coalesced byte ranges
 * :mod:`czarr.lowlevel.coalesce` — range fusion primitives
-* ``io`` / ``decode`` — cuFile reads and nvCOMP batch decode (next steps)
+* :mod:`czarr.lowlevel.io` — threaded cuFile reads into device buffers
+* :mod:`czarr.lowlevel.decode` — nvCOMP batch decode + scatter into the output
 
 ``czarr.core.Array`` composes these; each stage is also callable and
 benchable on its own.

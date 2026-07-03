@@ -3,8 +3,7 @@ version: 2
 build:
   os: ubuntu-24.04
   tools:
-    python: "3.14"
-    nodejs: latest
+    python: "3.13"
   jobs:
     create_environment:
       - asdf plugin add uv
@@ -12,5 +11,7 @@ build:
       - asdf global uv latest
     build:
       html:
-        - uvx hatch run docs:build
-        - mv docs/_build $READTHEDOCS_OUTPUT
+        # cu12 extra: mkdocstrings imports czarr for the API reference
+        # (imports work without a GPU; nothing launches kernels).
+        - uv run --extra cu12 --group doc zensical build
+        - mkdir -p $READTHEDOCS_OUTPUT && mv site $READTHEDOCS_OUTPUT/html
