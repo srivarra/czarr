@@ -6,7 +6,7 @@ call surface is identical, so the same code path serves both deployments.
 
 Sync-only by design: the stream-ordered async wrappers were deleted after
 benching 1.8-14x slower than threaded sync reads on Bruno NFS (see git
-history and ``bench/storage/probe_cufile_async.py`` for the constraints).
+history, including ``bench/storage/probe_cufile_async.py``, for the constraints).
 """
 
 import atexit

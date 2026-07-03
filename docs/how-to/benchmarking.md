@@ -1,6 +1,6 @@
 # Benchmarking with czarr-bench
 
-`czarr-bench` produced every number in these docs. Results append as JSON-lines to `bench/results/`, keyed by `(bench, params, gpu, commit)`, and are tracked in git.
+`czarr-bench` produced every number in these docs. Results append as JSON-lines under `bench/results/`, keyed by `(bench, params, gpu, commit)`.
 
 ```bash
 pip install "czarr[cu12,bench]"

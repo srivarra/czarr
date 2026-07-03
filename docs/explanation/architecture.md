@@ -36,7 +36,7 @@ The cached plan is keyed by metadata identity; writes drop it, because a rewritt
 
 ## Measurements
 
-From the H100 gate (`bench/results/zarr-read.jsonl`), blosc `[bitshuffle, zstd]` fixture:
+From the H100 gate (`czarr-bench sweep zarr-read`), blosc `[bitshuffle, zstd]` fixture:
 
 - At 128-256 MiB chunks, the fast path, lowlevel, and the zarr pipeline all read at about 20 GiB/s, against a raw GDS transfer ceiling of 24.6 GiB/s. Bulk reads are storage-concurrency-bound in every stack; the explicit tier's value there is the API contract, not throughput.
 - kvikio `GDSStore` with GPU codecs reads the same fixture at 1.6-1.9 GiB/s. GDS primitives alone do not make a fast zarr reader; batching and coalescing do.

@@ -130,7 +130,7 @@ def configure_gpu(
         because nvCOMP has ~35 ms per-call overhead and a per-thread
         codec warmup that smaller batches keep paying.  Set to a finite
         value (8, 16, 32) only if profiling shows you can amortise that
-        cost; see ``bench/overlap/sweep_h200`` for evidence that the
+        cost; see ``bench/overlap/sweep_h200`` (git history) for evidence that the
         naive microbatch knob alone regresses 4-15x.
     async_concurrency:
         Parallel ``store.get`` calls inside a batch.  Default 32.

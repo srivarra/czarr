@@ -47,3 +47,4 @@ bench/results/fixtures/
 bench/results/nsys_*
 bench/results/*.ncu-rep
 /site/
+/bench/
