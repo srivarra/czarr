@@ -1,13 +1,9 @@
-"""v0.1 skeleton tests for :class:`czarr.CudaZarrArray`.
+"""Tests for :class:`czarr.CudaZarrArray` and its factories.
 
-Round-trip + fast-path/fallback split, run against an in-memory store to
-keep the test suite hermetic.  cuFile + cupy JIT are not exercised here;
-real-GPU benches live in ``bench/cuda_array/``.
-
-The orchestrator currently delegates :meth:`_CudaArrayImpl.retrieve_gpu`
-to zarr's async machinery, so the fast and fallback paths produce the
-same bytes; later subtasks (``lfw5ftx9``, ``s7ucov1a``) replace the
-fast-path body and these tests pin the contract.
+Round-trip parity against a stock :class:`zarr.Array`, run against an
+in-memory store to keep the test suite hermetic.  cuFile + cupy JIT are
+not exercised here; real-GPU coverage lives in the storage/pipeline
+tests and the bench harness.
 """
 
 from __future__ import annotations
@@ -18,7 +14,6 @@ import zarr
 from zarr.storage import MemoryStore
 
 import czarr
-from czarr.array.cuda_array import _is_basic_indexing
 
 
 @pytest.fixture
@@ -36,57 +31,8 @@ def small_array(tmp_path) -> zarr.Array:
     return arr
 
 
-# ---------------------------------------------------------------------------
-# _is_basic_indexing — the type-guard for the fast path
-# ---------------------------------------------------------------------------
-
-
-class TestIsBasicIndexing:
-    """The fast-path eligibility predicate."""
-
-    @pytest.mark.parametrize(
-        "key",
-        [
-            0,
-            -1,
-            slice(None),
-            slice(0, 8),
-            slice(2, 10, 1),
-            slice(2, 10, None),
-            ...,
-            (0, slice(None), ...),
-            (slice(0, 8), 4, slice(None)),
-            (..., 0),
-            (),
-        ],
-    )
-    def test_accepts_basic(self, key) -> None:
-        assert _is_basic_indexing(key)
-
-    @pytest.mark.parametrize(
-        "key",
-        [
-            slice(0, 8, 2),  # step != 1
-            slice(None, None, -1),  # reversed
-            np.array([0, 2, 4]),  # integer-array advanced
-            np.array([True, False] * 8),  # bool mask
-            "field",  # structured-dtype field name
-            (slice(None), slice(0, 8, 2)),  # nested non-step-1
-            (..., ..., 0),  # multi-ellipsis
-            (np.array([0, 1]),),  # ndarray inside tuple
-        ],
-    )
-    def test_rejects_advanced(self, key) -> None:
-        assert not _is_basic_indexing(key)
-
-
-# ---------------------------------------------------------------------------
-# CudaZarrArray.wrap and the fast path
-# ---------------------------------------------------------------------------
-
-
 class TestWrap:
-    """``CudaZarrArray.wrap`` and basic-indexing fast path."""
+    """``CudaZarrArray.wrap`` parity with the wrapped array."""
 
     def test_wrap_returns_cuda_array(self, small_array) -> None:
         cuda = czarr.CudaZarrArray.wrap(small_array)
@@ -99,55 +45,25 @@ class TestWrap:
         assert cuda.dtype == small_array.dtype
         assert cuda.chunks == small_array.chunks
 
-    def test_wrap_takes_tuning_kwargs(self, small_array) -> None:
-        cuda = czarr.CudaZarrArray.wrap(small_array, queue_depth=32, microbatch_size=4)
-        assert cuda._orchestrator.queue_depth == 32
-        assert cuda._orchestrator.microbatch_size == 4
 
-    def test_orchestrator_lazy_init(self, small_array) -> None:
+class TestIndexingParity:
+    """Reads through the subclass match the stock zarr.Array byte-for-byte."""
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            np.s_[:],
+            np.s_[3],
+            np.s_[2:10, 4, :],
+            np.s_[..., 0],
+            np.s_[::2],
+        ],
+    )
+    def test_read_parity(self, small_array, key) -> None:
         cuda = czarr.CudaZarrArray.wrap(small_array)
-        # _impl is set eagerly via wrap; the property returns it.
-        assert cuda._orchestrator is cuda._impl
+        np.testing.assert_array_equal(np.asarray(cuda[key]), np.asarray(small_array[key]))
 
-
-class TestBasicIndexingFastPath:
-    """Round-trip parity between fast path and zarr.Array baseline."""
-
-    def test_full_slice(self, small_array) -> None:
-        cuda = czarr.CudaZarrArray.wrap(small_array)
-        expected = small_array[:]
-        actual = cuda[:]
-        np.testing.assert_array_equal(np.asarray(actual), np.asarray(expected))
-
-    def test_scalar_index(self, small_array) -> None:
-        cuda = czarr.CudaZarrArray.wrap(small_array)
-        expected = small_array[3]
-        actual = cuda[3]
-        np.testing.assert_array_equal(np.asarray(actual), np.asarray(expected))
-
-    def test_tuple_slice(self, small_array) -> None:
-        cuda = czarr.CudaZarrArray.wrap(small_array)
-        expected = small_array[2:10, 4, :]
-        actual = cuda[2:10, 4, :]
-        np.testing.assert_array_equal(np.asarray(actual), np.asarray(expected))
-
-    def test_ellipsis(self, small_array) -> None:
-        cuda = czarr.CudaZarrArray.wrap(small_array)
-        expected = small_array[..., 0]
-        actual = cuda[..., 0]
-        np.testing.assert_array_equal(np.asarray(actual), np.asarray(expected))
-
-
-class TestAdvancedIndexingFallback:
-    """Advanced indexing should fall through to ``zarr.Array.__getitem__``."""
-
-    def test_strided_slice_falls_through(self, small_array) -> None:
-        cuda = czarr.CudaZarrArray.wrap(small_array)
-        expected = small_array[::2]
-        actual = cuda[::2]
-        np.testing.assert_array_equal(np.asarray(actual), np.asarray(expected))
-
-    def test_bool_mask_falls_through(self, small_array) -> None:
+    def test_bool_mask_oindex(self, small_array) -> None:
         cuda = czarr.CudaZarrArray.wrap(small_array)
         mask = np.zeros(16, dtype=bool)
         mask[::4] = True

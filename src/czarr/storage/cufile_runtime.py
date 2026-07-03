@@ -4,11 +4,9 @@ cuFile silently degrades to "compatibility mode" (pinned host bounce buffer +
 async memcpy) when the host or filesystem does not support real GDS DMA — the
 call surface is identical, so the same code path serves both deployments.
 
-Async (``read_into_async``) needs strictly more setup than sync: stream must be
-registered, device buffer must be registered, and the size/offset/bytes-read
-arguments are *pointers to pinned host memory* (the GDS kernel reads them when
-the operation runs on-stream).  See module ``probe_cufile_async.py`` for the
-empirical constraints we discovered on Bruno.
+Sync-only by design: the stream-ordered async wrappers were deleted after
+benching 1.8-14x slower than threaded sync reads on Bruno NFS (see git
+history and ``bench/storage/probe_cufile_async.py`` for the constraints).
 """
 
 from __future__ import annotations
@@ -17,11 +15,9 @@ import atexit
 import ctypes
 import os
 import threading
-import weakref
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
-import cupy as cp
 from cuda.bindings import cufile
 
 
@@ -74,16 +70,6 @@ def is_available() -> bool:
     except Exception:  # noqa: BLE001 — opaque cuFile failures => unavailable
         return False
     return True
-
-
-def is_async_available() -> bool:
-    """True when the async read/write path can be used reliably.
-
-    Requires real GDS — ``nvidia_fs`` kernel module loaded.  On compat-mode-only
-    hosts (e.g. Bruno A40 nodes), libcufile crashes inside its worker thread on
-    the first ``read_async`` call.
-    """
-    return is_available() and os.path.exists("/proc/driver/nvidia-fs")
 
 
 def set_poll_mode(poll: bool, threshold_kb: int = 4) -> None:
@@ -177,7 +163,7 @@ def read_into_many(
         # a ThreadPoolExecutor — on Bruno's VAST NFS it regressed
         # (cufile.handle_register holds a driver-level lock; threads just
         # added scheduling overhead).  Keep serial; the real speedup
-        # source is the parallel-read phase plus future cuFile batched I/O.
+        # source is the parallel-read phase.
         for i, (path, _dev_ptr, size, _offset) in enumerate(requests):
             if size == 0:
                 continue
@@ -239,24 +225,12 @@ def write_from(path, dev_ptr: int, size: int, file_offset: int = 0) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Async path
+# Buffer registration (register-once slab pool support)
 # ---------------------------------------------------------------------------
 
 
-_registered_streams: set[int] = set()
 _registered_bufs: dict[int, int] = {}  # ptr -> size
-_async_lock = threading.Lock()
-
-
-def ensure_stream_registered(stream_ptr: int) -> None:
-    """Register a CUDA stream with cuFile (idempotent per stream pointer)."""
-    if stream_ptr in _registered_streams:
-        return
-    with _async_lock:
-        if stream_ptr in _registered_streams:
-            return
-        cufile.stream_register(stream_ptr, 0)
-        _registered_streams.add(stream_ptr)
+_registration_lock = threading.Lock()
 
 
 def ensure_buf_registered(dev_ptr: int, size: int) -> None:
@@ -268,7 +242,7 @@ def ensure_buf_registered(dev_ptr: int, size: int) -> None:
     existing = _registered_bufs.get(dev_ptr)
     if existing is not None and existing >= size:
         return
-    with _async_lock:
+    with _registration_lock:
         existing = _registered_bufs.get(dev_ptr)
         if existing is not None:
             try:
@@ -283,7 +257,7 @@ def deregister_buf(dev_ptr: int) -> None:
     """Best-effort buffer deregistration; silently ignores unknown pointers."""
     if dev_ptr not in _registered_bufs:
         return
-    with _async_lock:
+    with _registration_lock:
         if dev_ptr not in _registered_bufs:
             return
         try:
@@ -291,133 +265,3 @@ def deregister_buf(dev_ptr: int) -> None:
         except cufile.cuFileError:
             pass
         _registered_bufs.pop(dev_ptr, None)
-
-
-class _AsyncIOArgs:
-    """Pinned host scalars for one in-flight ``read_async`` / ``write_async``.
-
-    cuFile's stream-ordered API takes pointers to size/offset/bytes-completed —
-    the GDS kernel reads them when the work actually runs.  These pointers
-    must outlive the call until the stream syncs, so the caller stashes one of
-    these objects per outstanding submission.
-
-    Optional ``fd`` / ``fh`` / ``descr`` slots are populated by
-    :func:`read_into_async` to keep the OS fd, cuFile handle, and descriptor
-    alive until ``args`` is GC'd.  When set directly via :func:`read_async`
-    (caller owns the handle), they stay ``None`` and ``deregister``-on-finalize
-    is the caller's responsibility.
-    """
-
-    __slots__ = ("size_p", "off_p", "doff_p", "bytes_p", "_fd", "_fh", "_descr", "__weakref__")
-
-    def __init__(self) -> None:
-        self.size_p = cp.cuda.alloc_pinned_memory(8)
-        self.off_p = cp.cuda.alloc_pinned_memory(8)
-        self.doff_p = cp.cuda.alloc_pinned_memory(8)
-        self.bytes_p = cp.cuda.alloc_pinned_memory(8)
-        self._fd: int | None = None
-        self._fh: int | None = None
-        self._descr: object | None = None
-
-    def fill(self, size: int, file_offset: int, dev_offset: int) -> None:
-        """Populate the pinned scalars before submitting the async I/O."""
-        ctypes.cast(int(self.size_p), ctypes.POINTER(ctypes.c_size_t))[0] = size
-        ctypes.cast(int(self.off_p), ctypes.POINTER(ctypes.c_int64))[0] = file_offset
-        ctypes.cast(int(self.doff_p), ctypes.POINTER(ctypes.c_int64))[0] = dev_offset
-        ctypes.cast(int(self.bytes_p), ctypes.POINTER(ctypes.c_ssize_t))[0] = -1
-
-    @property
-    def bytes_done(self) -> int:
-        """Bytes actually transferred (read after stream sync)."""
-        return ctypes.cast(int(self.bytes_p), ctypes.POINTER(ctypes.c_ssize_t))[0]
-
-
-def make_io_args() -> _AsyncIOArgs:
-    """Allocate pinned-host scalar set for one async submission."""
-    return _AsyncIOArgs()
-
-
-def read_async(
-    fh: int,
-    dev_ptr: int,
-    size: int,
-    stream_ptr: int,
-    *,
-    args: _AsyncIOArgs,
-    file_offset: int = 0,
-    dev_offset: int = 0,
-) -> None:
-    """Submit a stream-ordered cuFile read into ``dev_ptr``.
-
-    Caller is responsible for: (1) pre-registering the device buffer via
-    :func:`ensure_buf_registered`, (2) pre-registering the stream via
-    :func:`ensure_stream_registered`, (3) holding ``args`` alive until the
-    stream syncs, then reading ``args.bytes_done``.
-
-    Note: this function assumes the caller has already opened the file +
-    registered its handle.  See :func:`read_into_async` for the path-based
-    convenience wrapper.
-    """
-    args.fill(size, file_offset, dev_offset)
-    cufile.read_async(
-        fh,
-        dev_ptr,
-        int(args.size_p),
-        int(args.off_p),
-        int(args.doff_p),
-        int(args.bytes_p),
-        stream_ptr,
-    )
-
-
-def read_into_async(
-    path,
-    dev_ptr: int,
-    size: int,
-    stream_ptr: int,
-    *,
-    file_offset: int = 0,
-) -> _AsyncIOArgs:
-    """Path-based async read for one-shot use; opens + registers + submits.
-
-    Returns the in-flight ``_AsyncIOArgs`` — caller must keep it alive until
-    the stream syncs, then call ``args.bytes_done`` to get the byte count.
-    The file handle is deregistered + closed when ``args`` is GC'd; for hot
-    paths use :func:`registered_handle` + :func:`read_async` directly.
-    """
-    if not is_async_available():
-        raise RuntimeError(
-            "cuFile async path unavailable (need nvidia_fs kernel module). Use read_into for sync fallback."
-        )
-    ensure_driver_open()
-    ensure_stream_registered(stream_ptr)
-    ensure_buf_registered(dev_ptr, size)
-    fd = os.open(os.fspath(path), os.O_RDONLY)
-    descr = cufile.Descr()
-    s = _CUfileDescr.from_address(int(descr))
-    s.type = int(cufile.FileHandleType.OPAQUE_FD)
-    s.handle.fd = fd
-    s.fs_ops = 0
-    fh = cufile.handle_register(int(descr))
-    args = make_io_args()
-    # Keep fd + fh + descr alive on the args object so they outlive the
-    # async call.  ``__slots__`` declares them so this is type-clean.
-    args._fd = fd
-    args._fh = fh
-    args._descr = descr
-
-    weakref.finalize(args, _close_async_handle, fd, fh)
-    read_async(fh, dev_ptr, size, stream_ptr, args=args, file_offset=file_offset)
-    return args
-
-
-def _close_async_handle(fd: int, fh: int) -> None:
-    """Deregister a cuFile handle + close its fd; called from ``_AsyncIOArgs`` finalize."""
-    try:
-        cufile.handle_deregister(fh)
-    except cufile.cuFileError:
-        pass
-    try:
-        os.close(fd)
-    except OSError:
-        pass

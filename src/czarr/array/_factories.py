@@ -16,12 +16,12 @@ instance and the factories pass it straight through.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Unpack
+from typing import TYPE_CHECKING, Any, Literal
 
 import zarr
 import zarr.abc.store
 
-from czarr.array.cuda_array import CudaZarrArray, CudaZarrArrayKwargs
+from czarr.array.cuda_array import CudaZarrArray
 from czarr.storage import GPULocalStore
 
 if TYPE_CHECKING:
@@ -48,7 +48,6 @@ def open_cuda_array(
     *,
     path: str | None = None,
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
-    **kwargs: Unpack[CudaZarrArrayKwargs],
 ) -> CudaZarrArray:
     """Open an existing array and wrap it as :class:`CudaZarrArray`.
 
@@ -56,13 +55,10 @@ def open_cuda_array(
     :class:`czarr.GPULocalStore` so the cuFile read path is the default;
     pass a :class:`zarr.abc.store.Store` instance to opt into a different
     backend.
-
-    Tuning kwargs (``queue_depth``, ``microbatch_size``) are threaded
-    into the orchestrator; non-tuning kwargs raise :class:`TypeError`.
     """
     resolved = _resolve_store(store, mode=mode)
     arr = zarr.open_array(store=resolved, path=path, mode=mode)
-    return CudaZarrArray.wrap(arr, **kwargs)
+    return CudaZarrArray.wrap(arr)
 
 
 def create_cuda_array(
@@ -76,7 +72,6 @@ def create_cuda_array(
     fill_value: Any | None = None,
     overwrite: bool = False,
     path: str | None = None,
-    **kwargs: Unpack[CudaZarrArrayKwargs],
 ) -> CudaZarrArray:
     """Create + wrap in one call.
 
@@ -101,4 +96,4 @@ def create_cuda_array(
         overwrite=overwrite,
         name=path,
     )
-    return CudaZarrArray.wrap(arr, **kwargs)
+    return CudaZarrArray.wrap(arr)

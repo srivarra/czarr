@@ -2,15 +2,11 @@
 
 Public surface:
 
-* :class:`CudaZarrArray` — :class:`zarr.Array` subclass with a
-  basic-indexing fast path that returns :class:`cupy.ndarray` on device.
-  Advanced indexing falls through to :meth:`zarr.Array.__getitem__` and
-  returns :class:`numpy.ndarray` on host.
+* :class:`CudaZarrArray` — :class:`zarr.Array` subclass returned by the
+  factories; GPU behavior comes from the globally configured pipeline,
+  prototypes, and store, not from the subclass.
 * :func:`open_cuda_array` — open an existing array path and wrap it.
 * :func:`create_cuda_array` — create + wrap in one call.
-
-Implementation lives in :mod:`czarr.array._impl`; the public API
-intentionally keeps the orchestrator off the user-facing namespace.
 """
 
 from __future__ import annotations

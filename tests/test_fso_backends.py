@@ -115,17 +115,10 @@ class TestConfigureGpuOverrides:
     """``configure_gpu(codec_backend_overrides=...)`` writes the global map."""
 
     def test_passing_filter_override_writes_map(self, monkeypatch) -> None:
-        from czarr import alloc, storage
-        from czarr import pipeline as pipe_mod
+        from czarr import alloc
 
         monkeypatch.setattr(alloc, "register_nvcomp_allocator", lambda: None)
         monkeypatch.setattr(alloc, "use_rmm_pool", lambda **kw: None)
-        monkeypatch.setattr(storage.cufile_runtime, "is_available", lambda: False)
-        monkeypatch.setattr(
-            pipe_mod.CzarrPipeline,
-            "configure",
-            classmethod(lambda cls, **kw: None),
-        )
         import zarr
 
         monkeypatch.setattr(zarr.config, "set", lambda *a, **kw: None)

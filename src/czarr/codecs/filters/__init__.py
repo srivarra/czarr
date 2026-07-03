@@ -3,7 +3,7 @@
 Phase 3 of the GPU-native zarr v3 pipeline refactor (epic ianyfe7m).
 
 * :class:`Shuffle` — ``BytesBytesCodec``, codec_name ``"shuffle"``.
-  GPU byteshuffle via the cuTile kernel in :mod:`czarr.kernels.byteshuffle`.
+  GPU byteshuffle via cupy reshape/transpose.
 * :class:`Delta` — ``ArrayArrayCodec``, codec_name ``"delta"``.
   First-differences encode; cumsum decode.
 * :class:`FixedScaleOffset` — ``ArrayArrayCodec``, codec_name

@@ -63,7 +63,7 @@ from czarr.codecs import (
 # resolves all v3 sharded metadata to the coalescing variant; not part
 # of the public API.
 from czarr.codecs.sharding import CzarrShardingCodec as _CzarrShardingCodec
-from czarr.storage import GPULocalStore, cufile_runtime
+from czarr.storage import GPULocalStore
 
 
 class _GpuConfigToken:
@@ -79,8 +79,8 @@ class _GpuConfigToken:
             out = arr[:]  # GPU decode path active here
         # zarr.config + backend overrides restored to their prior values
 
-    Not reverted: process-global one-time setup (RMM pool, nvCOMP allocator,
-    cuFile poll mode).  Those install once and have no clean teardown — a
+    Not reverted: process-global one-time setup (RMM pool, nvCOMP
+    allocator).  Those install once and have no clean teardown — a
     second ``configure_gpu`` reconfigures them in place.
     """
 
@@ -102,12 +102,8 @@ class _GpuConfigToken:
 def configure_gpu(
     *,
     batch_size: int | None = None,
-    decode_batch_size: int | None = None,
     async_concurrency: int = 32,
     rmm_pool_gb: float | None = None,
-    cufile_poll_mode: bool = False,
-    cufile_poll_threshold_kb: int = 4,
-    pinned_prealloc: Any = None,
     pipeline: bool = True,
     codec_backend_overrides: dict[str, str] | None = None,
 ) -> _GpuConfigToken:
@@ -130,35 +126,20 @@ def configure_gpu(
     Parameters
     ----------
     batch_size:
-        Explicit override for ``codec_pipeline.batch_size``.  When set,
-        wins over ``decode_batch_size``.  Use ``sys.maxsize`` to force
-        "all chunks in one decode call" (max nvCOMP batching, no
-        read/decode overlap).
-    decode_batch_size:
-        Micro-batch size for the read/decode pipeline.  ``None`` (default)
-        sends every chunk through a single nvCOMP call — best on our
-        H200 bench because nvCOMP has ~35 ms per-call overhead and a
-        per-thread codec warmup that smaller batches keep paying.
-        Set to a finite value (8, 16, 32) only if profiling shows you
-        can amortise that cost; see ``bench/overlap/sweep_h200`` for
-        evidence that the naive microbatch knob alone regresses 4-15×.
+        Micro-batch size for the read/decode pipeline
+        (``codec_pipeline.batch_size``).  ``None`` (default) sends every
+        chunk through a single nvCOMP call — best on our H200 bench
+        because nvCOMP has ~35 ms per-call overhead and a per-thread
+        codec warmup that smaller batches keep paying.  Set to a finite
+        value (8, 16, 32) only if profiling shows you can amortise that
+        cost; see ``bench/overlap/sweep_h200`` for evidence that the
+        naive microbatch knob alone regresses 4-15×.
     async_concurrency:
         Parallel ``store.get`` calls inside a batch.  Default 32.
     rmm_pool_gb:
         If set, initialise an RMM pool of this size (in GiB) and route all
         device allocations (cupy + nvCOMP) through it.  Use when sharing a
         process with cuDF / cuML / kvikIO.
-    cufile_poll_mode:
-        If True, switch cuFile from IRQ-driven to spin-polling completion
-        for I/Os up to ``cufile_poll_threshold_kb``.  Lower latency on
-        small reads at the cost of CPU.  Default False — fine for our
-        typical multi-MiB chunks.
-    cufile_poll_threshold_kb:
-        Max I/O size (KiB) that uses polling when ``cufile_poll_mode=True``.
-        Larger I/Os fall back to IRQ-driven completion regardless.
-    pinned_prealloc:
-        Optional iterable of ``(size, count)`` tuples for the shared
-        :class:`PinnedHostPool` pre-allocation hint.
     pipeline:
         If True (default), register :class:`CzarrPipeline` as zarr's
         default ``codec_pipeline``.  Set False to opt into per-array
@@ -188,17 +169,8 @@ def configure_gpu(
         use_rmm_pool(initial_size=int(rmm_pool_gb * (1 << 30)))
     register_nvcomp_allocator()
     set_backend_overrides(codec_backend_overrides or {})
-    if cufile_poll_mode and cufile_runtime.is_available():
-        cufile_runtime.set_poll_mode(True, cufile_poll_threshold_kb)
 
-    CzarrPipeline.configure(pinned_prealloc=pinned_prealloc)
-
-    if batch_size is not None:
-        effective_batch_size = batch_size
-    elif decode_batch_size is not None:
-        effective_batch_size = decode_batch_size
-    else:
-        effective_batch_size = sys.maxsize
+    effective_batch_size = batch_size if batch_size is not None else sys.maxsize
     settings: dict[str, Any] = {
         "codec_pipeline.batch_size": effective_batch_size,
         "async.concurrency": async_concurrency,

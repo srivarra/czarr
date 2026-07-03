@@ -141,8 +141,8 @@ def probe_affordances(dev: Device) -> dict[str, object]:
     stream = dev.default_stream
 
     dbuf = mr.allocate(4096, stream=stream)
-    # LegacyPinnedMemoryResource accepts stream=None per the project's
-    # PinnedHostPool — host memory is not stream-ordered.
+    # LegacyPinnedMemoryResource accepts stream=None — pinned host
+    # memory is not stream-ordered.
     hbuf = pinned_mr.allocate(4096)
 
     dlpack_ok = False

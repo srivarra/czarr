@@ -5,23 +5,13 @@ byte buffer.  Each chunk is treated as one big shuffle block of size
 ``chunk_byte_length`` with element width ``elementsize``; the codec
 swaps adjacent ``elementsize`` byte rows so each plane is contiguous.
 
-Two backends:
-
-* ``backend="cupy"`` (default) — cupy ``reshape/transpose/ascontiguousarray``.
-  Works on every supported GPU including H100/H200.  This is the
-  safe default — cuda-tile 1.3 fails to compile on sm_90 (``tileiras:
-  Cannot find option named 'sm_90'``), so the cuTile path crashes
-  on Hopper for any shape.
-* ``backend="cutile"`` — :mod:`cuda.tile` transpose; ~2.5x faster than
-  cupy on A40 (~327 GiB/s @ typesize=2, validated by the Phase 2
-  filter bench sweep).  Opt-in for sm_<90 users who need the
-  bandwidth; broken on H100/H200 until a cuTile release ships with
-  sm_90 support.
-
-cuda.compute has no transpose primitive, so the byte-plane transpose
-stays out of the cccl family for now (would need a custom Raw/Program
-kernel).  Both backends produce the same on-disk bitstream; the
-``backend`` field is runtime — not persisted in Zarr v3 metadata.
+Single ``"cupy"`` backend — ``reshape/transpose/ascontiguousarray``,
+works on every supported GPU including H100/H200.  A cuTile transpose
+variant (~2.5x more bandwidth on A40) was deleted: cuda-tile 1.3 fails
+to compile on sm_90, the real-GDS targets, and shuffle is not a
+read-path bottleneck.  Re-add as a cupy RawKernel if a filter sweep
+ever shows it mattering (see git history).  The ``backend`` field is
+runtime — not persisted in Zarr v3 metadata.
 """
 
 from __future__ import annotations
@@ -50,14 +40,12 @@ class Shuffle(BytesBytesCodec):
         Number of bytes per element to shuffle across.  Must divide the
         chunk byte length.
     backend:
-        Runtime impl choice.  ``"cupy"`` (default) is Hopper-safe;
-        ``"cutile"`` opts in to the cuda.tile transpose kernel for ~2.5x
-        more bandwidth on A40 (broken on H100/H200).  Not persisted.
+        Runtime impl choice.  Only ``"cupy"`` today.  Not persisted.
     """
 
     is_fixed_size: ClassVar[bool] = False
     codec_name: ClassVar[str] = "shuffle"
-    _supported_backends: ClassVar[tuple[CodecBackend, ...]] = ("cupy", "cutile")
+    _supported_backends: ClassVar[tuple[CodecBackend, ...]] = ("cupy",)
     _default_backend: ClassVar[CodecBackend] = "cupy"
 
     elementsize: int = 4
@@ -75,23 +63,13 @@ class Shuffle(BytesBytesCodec):
     async def _decode_single(self, chunk_data: Buffer, chunk_spec: ArraySpec) -> Buffer:
         arr = chunk_data.as_array_like()
         cp_arr = cp.asarray(arr).view(cp.uint8) if not isinstance(arr, cp.ndarray) else arr.view(cp.uint8)
-        if self.backend == "cupy":
-            out = _byteunshuffle_cupy(cp_arr, self.elementsize, cp_arr.size)
-        else:
-            from czarr.kernels.byteshuffle import byteunshuffle_batched
-
-            out = byteunshuffle_batched(cp_arr, self.elementsize, cp_arr.size)
+        out = _byteunshuffle_cupy(cp_arr, self.elementsize, cp_arr.size)
         return chunk_spec.prototype.buffer.from_array_like(out)
 
     async def _encode_single(self, chunk_data: Buffer, chunk_spec: ArraySpec) -> Buffer:
         arr = chunk_data.as_array_like()
         cp_arr = cp.asarray(arr).view(cp.uint8) if not isinstance(arr, cp.ndarray) else arr.view(cp.uint8)
-        if self.backend == "cupy":
-            out = _byteshuffle_cupy(cp_arr, self.elementsize, cp_arr.size)
-        else:
-            from czarr.kernels.byteshuffle import byteshuffle_batched
-
-            out = byteshuffle_batched(cp_arr, self.elementsize, cp_arr.size)
+        out = _byteshuffle_cupy(cp_arr, self.elementsize, cp_arr.size)
         return chunk_spec.prototype.buffer.from_array_like(out)
 
     def compute_encoded_size(self, input_byte_length: int, _chunk_spec: ArraySpec) -> int:
@@ -121,11 +99,7 @@ class Shuffle(BytesBytesCodec):
 
 
 def _byteunshuffle_cupy(packed: cp.ndarray, typesize: int, blocksize: int) -> cp.ndarray:
-    """Pure cupy byteunshuffle — reshape + transpose + ascontiguousarray.
-
-    Roughly 2.5x slower than the cuda.tile path on A40 but works on
-    every GPU we target.  Bit-exact with the cuTile result.
-    """
+    """Pure cupy byteunshuffle — reshape + transpose + ascontiguousarray."""
     if packed.size % blocksize != 0:
         raise ValueError(f"byteunshuffle: input {packed.size} not a multiple of blocksize {blocksize}")
     nblocks = packed.size // blocksize

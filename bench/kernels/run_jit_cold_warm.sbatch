@@ -18,8 +18,8 @@ module load cuda/13.1.0_590.44.01
 export LD_LIBRARY_PATH="/hpc/apps/x86_64/cuda/13.1.0_590.44.01/targets/x86_64-linux/lib:${LD_LIBRARY_PATH:-}"
 
 # The probe script we want to time twice — one full configure_gpu +
-# arr[:] round-trip through cuTile (Shuffle filter) + RawKernel
-# (we'll add later) + nvCOMP.
+# arr[:] round-trip through the Shuffle filter (cupy transpose) +
+# nvCOMP zstd, comparing cold vs warm kernel caches.
 PROBE=$(cat <<'PY'
 import os, sys, time, tempfile
 os.environ.setdefault("CUFILE_FORCE_COMPAT_MODE", "true")
@@ -57,7 +57,7 @@ echo "=== gpu ==="; nvidia-smi --query-gpu=name --format=csv,noheader
 echo
 
 echo "=== COLD (caches purged) ==="
-rm -rf ~/.cache/cutile-python ~/.cupy/kernel_cache ~/.nv/ComputeCache
+rm -rf ~/.cupy/kernel_cache ~/.nv/ComputeCache
 uv run --extra cu12 --group test python -c "$PROBE"
 echo
 
@@ -70,4 +70,4 @@ uv run --extra cu12 --group test python -c "$PROBE"
 echo
 
 echo "=== cache sizes after run ==="
-du -sh ~/.cache/cutile-python ~/.cupy/kernel_cache ~/.nv/ComputeCache 2>/dev/null || true
+du -sh ~/.cupy/kernel_cache ~/.nv/ComputeCache 2>/dev/null || true

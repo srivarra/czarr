@@ -5,7 +5,6 @@
   Snappy).
 * :mod:`czarr.codecs.filters` — ArrayArrayCodec / BytesBytesCodec
   filters: Shuffle, Delta, FixedScaleOffset, BitRound.
-* :mod:`czarr.codecs.checksum` — checksum BytesBytesCodecs (Crc32c).
 
 Public symbols are re-exported from this module so users can write
 ``from czarr.codecs import Zstd`` (or just ``from czarr import Zstd``).

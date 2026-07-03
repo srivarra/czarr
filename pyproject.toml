@@ -24,8 +24,6 @@ classifiers = [
 dependencies = [
   # CUDA-version-agnostic core. Pick a CUDA build via the `cu12` or `cu13`
   # extra below — installing czarr without one of them will fail at import.
-  "cuda-tile>=1.3",             # tile DSL — powers the byteshuffle inverse kernel
-  "nvidia-cuda-tileiras",       # cuTile compiler binary (pip package, ~35 MiB)
   "session-info2",
   "zarr>=3.2.1",
 ]

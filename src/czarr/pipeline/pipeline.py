@@ -5,14 +5,9 @@ instantiated per array call and orchestrates the codec chain.
 
 What this subclass changes:
 
-* Owns a class-level :class:`PinnedHostPool` so individual codecs can
-  reach across into shared substrate without having to thread the
-  instance through every call site.
 * Adds NVTX-instrumented ``read_batch`` / ``write_batch`` so the nsys
   timeline shows the read + decode interleave that fires when
   ``codec_pipeline.batch_size`` is set below ``len(chunks)``.
-* Provides :func:`configure` for tuning the substrate from
-  :func:`czarr.configure_gpu`.
 
 The actual GPU-direct passthrough that eliminates the
 host-round-trip lives in :class:`CudaBytesBytesCodec._batch_sync` — when
@@ -28,7 +23,7 @@ batch, reads happen concurrently and decode runs after they all
 arrive.  Across batches, the decode of batch K runs concurrently with
 the reads of batch K+1.  So the lever for overlap is just ``batch_size``
 — the default is one bulk batch (no overlap; measured near-optimal on
-GDS), with ``configure_gpu(decode_batch_size=...)`` as the opt-in.
+GDS), with ``configure_gpu(batch_size=...)`` as the opt-in.
 
 The NVTX wrappers below make the overlap visible in nsys; the actual
 concurrency comes from zarr's pipeline machinery.
@@ -42,12 +37,11 @@ directly — zarr 3.x does not accept a ``codec_pipeline=`` kwarg per array.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from zarr.core.codec_pipeline import BatchedCodecPipeline
 
 from czarr._nvtx import nvtx_range
-from czarr.pipeline.pinned import PinnedHostPool
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -61,35 +55,7 @@ if TYPE_CHECKING:
 
 
 class CzarrPipeline(BatchedCodecPipeline):
-    """zarr v3 CodecPipeline with GPU-aware staging + shared substrate."""
-
-    # Class-level shared substrate.  Lazily initialised on first
-    # ``get_pinned_pool`` access; reconfigurable via :func:`configure`.
-    # Static state is fine here — device-bound and process-global by nature.
-    _pinned_pool: ClassVar[PinnedHostPool | None] = None
-
-    @classmethod
-    def get_pinned_pool(cls) -> PinnedHostPool:
-        """Return the shared PinnedHostPool, lazily creating it on first call."""
-        if cls._pinned_pool is None:
-            cls._pinned_pool = PinnedHostPool()
-        return cls._pinned_pool
-
-    @classmethod
-    def configure(
-        cls,
-        *,
-        pinned_prealloc: Iterable[tuple[int, int]] | None = None,
-    ) -> None:
-        """Reconfigure the shared substrate; closes existing pools.
-
-        Call from :func:`czarr.configure_gpu` to set defaults at process
-        startup.  Subsequent reconfiguration is allowed but should be
-        done from a quiescent state (no in-flight pipeline calls).
-        """
-        if cls._pinned_pool is not None:
-            cls._pinned_pool.close()
-        cls._pinned_pool = PinnedHostPool(prealloc=list(pinned_prealloc) if pinned_prealloc else None)
+    """zarr v3 CodecPipeline with NVTX-instrumented batched read/write."""
 
     # NOTE: a read_batch override that routes through GPULocalStore.get_many
     # was tried (Phase 2 of epic z3hd9ph7) and benched on Bruno H100.
@@ -102,10 +68,10 @@ class CzarrPipeline(BatchedCodecPipeline):
     # H100 regression made the override a net negative across the
     # hardware we target.
     #
-    # GPULocalStore.get_many stays in place as a building block; the real
-    # speedup will come from a future phase (cuFile batched I/O API:
-    # cuFileBatchIOSetUp/Submit/GetStatus) which collapses the open +
-    # register cycle into one driver call.  Until then, no override.
+    # GPULocalStore.get_many was removed with the dead-code sweep (git
+    # history has it); cuFile batched I/O (cuFileBatchIOSetUp/Submit)
+    # was probed separately and also lost to threaded sync reads.  zarr's
+    # stock concurrent_map path is the read dispatcher.
 
     # ------------------------------------------------------------------
     # NVTX-instrumented read/write — same logic as the parent, but each
