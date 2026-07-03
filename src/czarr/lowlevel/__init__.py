@@ -10,6 +10,8 @@ Design: ``.planning/lowlevel-api-design.md``.  Stages:
 benchable on its own.
 """
 
+from typing import Any
+
 from czarr.lowlevel.coalesce import ByteRange, FusedRead, coalesce_ranges, slice_into_outputs
 from czarr.lowlevel.plan import DecodePlan, ReadRequest, ShardSpec, normalize_selection, open_plan, plan_from_metadata
 
@@ -23,5 +25,18 @@ __all__ = [
     "normalize_selection",
     "open_plan",
     "plan_from_metadata",
+    "read",
     "slice_into_outputs",
 ]
+
+_LAZY = {"read": "czarr.lowlevel.io"}  # GPU-touching stages load on first use
+
+
+def __getattr__(name: str) -> Any:
+    # Planning stays importable on hosts without CUDA; ``lowlevel.read``
+    # (and later ``decode``) pull cupy only when actually used.
+    if name in _LAZY:
+        import importlib
+
+        return getattr(importlib.import_module(_LAZY[name]), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

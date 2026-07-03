@@ -72,6 +72,51 @@ def is_available() -> bool:
     return True
 
 
+# Friendly names for the cufile.json knobs reachable via set_parameter_*.
+# Values mirror the cuFile configuration guide; tune via czarr.cufile.configure.
+_SIZET_PARAMS = {
+    "max_io_threads": cufile.SizeTConfigParameter.EXECUTION_MAX_IO_THREADS,
+    "max_io_queue_depth": cufile.SizeTConfigParameter.EXECUTION_MAX_IO_QUEUE_DEPTH,
+    "min_io_threshold_size_kb": cufile.SizeTConfigParameter.EXECUTION_MIN_IO_THRESHOLD_SIZE_KB,
+    "max_request_parallelism": cufile.SizeTConfigParameter.EXECUTION_MAX_REQUEST_PARALLELISM,
+    "max_direct_io_size_kb": cufile.SizeTConfigParameter.PROPERTIES_MAX_DIRECT_IO_SIZE_KB,
+    "max_device_cache_size_kb": cufile.SizeTConfigParameter.PROPERTIES_MAX_DEVICE_CACHE_SIZE_KB,
+}
+_BOOL_PARAMS = {
+    "parallel_io": cufile.BoolConfigParameter.EXECUTION_PARALLEL_IO,
+    "allow_compat_mode": cufile.BoolConfigParameter.PROPERTIES_ALLOW_COMPAT_MODE,
+}
+
+
+def configure(**knobs: int | bool) -> None:
+    """Set cuFile config knobs programmatically (the cufile.json equivalents).
+
+    Must be called BEFORE the driver opens (first read / ``is_available``
+    call) — libcufile reads its configuration at ``driver_open``, and the
+    setting is process-wide and permanent for the driver's lifetime.
+    Raises ``RuntimeError`` if the driver is already open, ``KeyError``
+    for an unknown knob.
+
+    Knobs (see the GDS configuration guide for semantics):
+    ``max_io_threads`` (internal pool, default 4), ``max_io_queue_depth``,
+    ``min_io_threshold_size_kb`` (large-read split threshold, default
+    8192), ``max_request_parallelism`` (default 4),
+    ``max_direct_io_size_kb`` (per-request IO chunk, default 16384),
+    ``max_device_cache_size_kb``, ``parallel_io`` (default True),
+    ``allow_compat_mode`` (set False to fail loudly instead of silently
+    staging through the CPU).
+    """
+    if _opened:
+        raise RuntimeError("cuFile driver already open — configure() must run before the first cuFile call")
+    for name, value in knobs.items():
+        if name in _SIZET_PARAMS:
+            cufile.set_parameter_size_t(_SIZET_PARAMS[name], int(value))
+        elif name in _BOOL_PARAMS:
+            cufile.set_parameter_bool(_BOOL_PARAMS[name], bool(value))
+        else:
+            raise KeyError(f"unknown cuFile knob {name!r}; known: {sorted(_SIZET_PARAMS | _BOOL_PARAMS)}")
+
+
 def set_poll_mode(poll: bool, threshold_kb: int = 4) -> None:
     """Toggle cuFile's polling-vs-IRQ completion mode.
 
