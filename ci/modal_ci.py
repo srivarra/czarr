@@ -112,9 +112,22 @@ def _run_suite() -> None:
     test_tmp = "/root/czarr-test-tmp"
     Path(test_tmp).mkdir(exist_ok=True)
     # Unbuffered so the dot-progress line streams instead of arriving in
-    # 72-char chunks; faulthandler dumps the stack of any test stuck >120s.
+    # 72-char chunks.  faulthandler dumps the stack of any test stuck >120s
+    # and aborts, instead of hanging mutely until Modal's function timeout
+    # (pytest 9 dropped the --faulthandler-timeout flag; ini options only).
     subprocess.run(
-        [f"{VENV}/bin/python", "-u", "-m", "pytest", "tests/", "-q", "--faulthandler-timeout=120"],
+        [
+            f"{VENV}/bin/python",
+            "-u",
+            "-m",
+            "pytest",
+            "tests/",
+            "-q",
+            "-o",
+            "faulthandler_timeout=120",
+            "-o",
+            "faulthandler_exit_on_timeout=true",
+        ],
         check=True,
         cwd=REMOTE_ROOT,
         env=env | {"CZARR_TEST_TMP": test_tmp, "PYTHONUNBUFFERED": "1"},
