@@ -5,7 +5,7 @@
 |             |                                                                                                                                                                                            |
 | :---------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | **Status**  | [![Build][badge-build]][link-build] [![Tests][badge-test]][link-test] [![Documentation][badge-docs]][link-docs] [![codecov][badge-codecov]][link-codecov] [![prek][badge-prek]][link-prek] [![zizmor][badge-zizmor]][link-zizmor] |
-|  **Meta**   | [![Hatch project][badge-hatch]][link-hatch] [![Ruff][badge-ruff]][link-ruff] [![ty][badge-ty]][link-ty] [![uv][badge-uv]][link-uv] [![License][badge-license]][link-license]               |
+|  **Meta**   | [![Hatch project][badge-hatch]][link-hatch] [![Ruff][badge-ruff]][link-ruff] [![ty][badge-ty]][link-ty] [![uv][badge-uv]][link-uv] [![Conventional Commits][badge-cc]][link-cc] [![Commitizen friendly][badge-cz]][link-cz] [![License][badge-license]][link-license]               |
 | **Package** | [![PyPI][badge-pypi]][link-pypi] [![PyPI][badge-python-versions]][link-pypi]                                                                                                               |
 |             |                                                                                                                                                                                            |
 
@@ -21,6 +21,8 @@
 [badge-ruff]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
 [badge-ty]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json
 [badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
+[badge-cc]: https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white
+[badge-cz]: https://img.shields.io/badge/commitizen-friendly-brightgreen.svg
 [badge-license]: https://img.shields.io/badge/License-MIT-yellow.svg
 [badge-pypi]: https://img.shields.io/pypi/v/czarr.svg?logo=pypi&label=PyPI&logoColor=gold
 [badge-python-versions]: https://img.shields.io/pypi/pyversions/czarr.svg?logo=python&label=Python&logoColor=gold
@@ -34,6 +36,8 @@
 [link-ruff]: https://github.com/astral-sh/ruff
 [link-ty]: https://github.com/astral-sh/ty
 [link-uv]: https://github.com/astral-sh/uv
+[link-cc]: https://www.conventionalcommits.org
+[link-cz]: https://commitizen-tools.github.io/commitizen/
 [link-license]: https://opensource.org/licenses/MIT
 [link-pypi]: https://pypi.org/project/czarr/
 

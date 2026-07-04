@@ -31,8 +31,9 @@ jobs:
           config: cliff.toml
           args: --verbose
         env:
+          # No GITHUB_REPO: exporting it activates git-cliff's GitHub API
+          # integration, which the config deliberately avoids.
           OUTPUT: CHANGELOG.md
-          GITHUB_REPO: ${{ github.repository }}
 
       - name: Commit and push if changed
         run: |
