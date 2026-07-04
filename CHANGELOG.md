@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GPU codecs, batched pipeline, cuFile store for Zarr 3 ([77d4ca5](https://github.com/srivarra/czarr/commit/77d4ca5294164aad228de4503be4a948e17950f2))
 
 ### 🐛 Fixes
+- **deps:** Use real CUDA 13 wheel names and ship cufile in the extras ([bb9305c](https://github.com/srivarra/czarr/commit/bb9305cdce5356f489ad2f1e64ece0f57b9dfeaa))
 - **ci:** Grant changelog job pull-requests read ([1a9ce09](https://github.com/srivarra/czarr/commit/1a9ce0907c029a062d1377f079a9e755c18f6542))
 - **ci:** Environment-independent ty results; skip SARIF on private repo ([6d9d806](https://github.com/srivarra/czarr/commit/6d9d8066721e40a6bd8e23fb2eb9611732ef0233))
 - **tests:** Stop littering the repo root with .gpustore_test_ dirs ([2a0c214](https://github.com/srivarra/czarr/commit/2a0c21440fc4f116636ca44906907c83a568b772))
