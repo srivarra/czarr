@@ -2,12 +2,28 @@
 
 import os
 import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import pytest
 import zarr
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Optionally skip interpreter teardown once the verdict is decided.
+
+    CUDA context destructors segfault at interpreter exit under gVisor
+    sandboxes (Modal), turning a green suite into SIGSEGV.  Container CI
+    sets CZARR_TEST_HARD_EXIT=1 to exit with pytest's status before those
+    destructors run; normal runs keep full teardown.
+    """
+    if os.environ.get("CZARR_TEST_HARD_EXIT") == "1":
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(int(exitstatus))
+
 
 # cuFile in compat mode rejects tmpfs/ramfs; force compat path on hosts
 # without nvidia_fs so cuFile-dependent tests still run on tmpfs-free

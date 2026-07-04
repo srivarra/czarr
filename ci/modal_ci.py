@@ -13,9 +13,34 @@ same semantics as the A40 dev baseline.  See issue #14 for the SM/CUDA
 matrix this feeds.
 """
 
+import os
+import tomllib
 from pathlib import Path
 
 import modal
+
+# uv_sync sanity-checks pyproject.toml with the abandoned `toml` package,
+# which IndexErrors on PEP 735 `{ include-group = ... }` entries.  Reroute
+# its parsing to stdlib tomllib (accepting both the path and file-object
+# call forms toml.load supports).  Client-side only: the check runs where
+# the CLI runs, and the container image has no toml to patch (this module
+# is re-imported there to hydrate the classes).  Drop when modal-labs
+# switches parsers.
+
+
+def _tomllib_load(f) -> dict:
+    if isinstance(f, str | os.PathLike):
+        return tomllib.loads(Path(f).read_text())
+    return tomllib.loads(f.read())
+
+
+try:
+    import toml as _toml
+
+    _toml.load = _tomllib_load
+    _toml.loads = tomllib.loads
+except ModuleNotFoundError:
+    pass
 
 REPO_ROOT = Path(__file__).parent.parent
 REMOTE_ROOT = "/root/czarr"
@@ -138,6 +163,9 @@ def _run_suite() -> None:
             # reads take the host-I/O + H2D fallback.  GDS coverage stays
             # on Bruno.
             "CZARR_CUFILE": "0",
+            # CUDA context destructors segfault at interpreter exit under
+            # gVisor; exit on pytest's verdict before they run.
+            "CZARR_TEST_HARD_EXIT": "1",
         },
     )
 
