@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **storage:** Use Buffer.create_zero_length() for empty key ([fe1f7a3](https://github.com/srivarra/czarr/commit/fe1f7a34f98da7edb9ca57b394047cb75e78f9e1))
 
 ### 📝 Documentation
+- Include the changelog in the site ([5d779e9](https://github.com/srivarra/czarr/commit/5d779e955494747b6f8e32609860a2c111f76155))
 - Pierre color theme; drop the tautological GPU tag ([8c7232b](https://github.com/srivarra/czarr/commit/8c7232b81e2423fbf163fa90bf622f9fce54f430))
 - Adopt zensical palette, tags, grids, tabs, footnotes ([41ed51e](https://github.com/srivarra/czarr/commit/41ed51ec64aa31c7486bbaf30e2bfd55e2cfb93d))
 - Keep measurements out of usage pages ([ef1adcc](https://github.com/srivarra/czarr/commit/ef1adccdb79feb69e38c77a84725a4ca8e78b998))
@@ -109,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove scverse template scaffold ([da49c11](https://github.com/srivarra/czarr/commit/da49c11aec82ac9406a151d73031968771ea3907))
 
 ### 🌀 Miscellaneous
+- Merge pull request #12 from srivarra/docs-changelog ([d665506](https://github.com/srivarra/czarr/commit/d665506340d7a0f08caf54fa39e6d9aeb1914f43))
 - Merge pull request #11 from srivarra/changelog-perms ([26e4f9f](https://github.com/srivarra/czarr/commit/26e4f9fbe6ccbb3da838a672ba70ea69d03548ec))
 - Merge pull request #10 from srivarra/dynamic-version ([c368c4a](https://github.com/srivarra/czarr/commit/c368c4a34772e87e0bcf47b5056257eb17a603d2))
 - Merge pull request #8 from srivarra/docs-features ([5792791](https://github.com/srivarra/czarr/commit/5792791f4f35e775da553a6f14549eeade643e07))
