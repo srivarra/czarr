@@ -3,7 +3,7 @@
 import struct
 import zlib
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
 from zarr.core.common import JSON
 
@@ -28,6 +28,7 @@ class Gzip(CudaBytesBytesCodec):
 
     level: int = 5
 
+    @override
     def _wrap_frame(self, compressed: bytes, original: memoryview) -> bytes:
         # gzip RFC 1952 header: ID1 ID2 CM FLG MTIME(4) XFL OS
         # Use canonical "no extra flags, MTIME=0, OS=unknown(255)".
@@ -37,6 +38,7 @@ class Gzip(CudaBytesBytesCodec):
         trailer = struct.pack("<II", crc, isize)
         return header + compressed + trailer
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Emit the numcodecs Gzip schema (no czarr-internal fields)."""
         return {

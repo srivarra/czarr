@@ -3,7 +3,7 @@
 import struct
 import zlib
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
 from zarr.core.common import JSON
 
@@ -26,6 +26,7 @@ class Zlib(CudaBytesBytesCodec):
 
     level: int = 5
 
+    @override
     def _wrap_frame(self, compressed: bytes, original: memoryview) -> bytes:
         # zlib RFC 1950 header for default level + 32K window: 0x789C.
         header = b"\x78\x9c"
@@ -33,6 +34,7 @@ class Zlib(CudaBytesBytesCodec):
         trailer = struct.pack(">I", adler)
         return header + compressed + trailer
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Emit the numcodecs Zlib schema (no czarr-internal fields)."""
         return {

@@ -13,7 +13,7 @@ every other compressor.)
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import ClassVar, Self, override
 
 from zarr.core.common import JSON
 
@@ -38,6 +38,7 @@ class LZ4(CudaBytesBytesCodec):
 
     acceleration: int = 1  # numcodecs metadata field; ignored by nvCOMP
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Emit the numcodecs LZ4 schema (no czarr-internal fields).
 
@@ -51,6 +52,7 @@ class LZ4(CudaBytesBytesCodec):
         }
 
     @classmethod
+    @override
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata."""
         return cls(**codec_config(data))

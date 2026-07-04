@@ -30,7 +30,7 @@ quantisation boundaries.
 """
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Self
+from typing import ClassVar, Self, override
 
 import cupy as cp
 from numpy.typing import DTypeLike
@@ -88,6 +88,7 @@ class FixedScaleOffset(ArrayArrayCodec):
     def _store_dtype(self) -> DTypeLike:
         return self.astype if self.astype is not None else self.dtype
 
+    @override
     async def _decode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         q = cp.asarray(chunk_data.as_ndarray_like())
         flat = q.ravel()
@@ -99,6 +100,7 @@ class FixedScaleOffset(ArrayArrayCodec):
             x_flat = flat.astype(self.dtype, copy=False) / self.scale + self.offset
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(x_flat.reshape(chunk_spec.shape))
 
+    @override
     async def _encode_single(self, chunk_data: NDBuffer, chunk_spec: ArraySpec) -> NDBuffer:
         x = cp.asarray(chunk_data.as_ndarray_like())
         flat = x.ravel()
@@ -113,6 +115,7 @@ class FixedScaleOffset(ArrayArrayCodec):
             q_flat = q_flat.astype(self._store_dtype, copy=False)
         return chunk_spec.prototype.nd_buffer.from_ndarray_like(q_flat.reshape(chunk_spec.shape))
 
+    @override
     def compute_encoded_size(self, input_byte_length: int, chunk_spec: ArraySpec) -> int:
         """Encoded size depends on the storage dtype's itemsize."""
         if self.astype is None:
@@ -121,6 +124,7 @@ class FixedScaleOffset(ArrayArrayCodec):
         src_item = chunk_spec.dtype.to_native_dtype().itemsize
         return (input_byte_length // src_item) * item
 
+    @override
     def to_dict(self) -> dict[str, JSON]:
         """Serialise codec config for storage in Zarr v3 metadata.
 
@@ -137,6 +141,7 @@ class FixedScaleOffset(ArrayArrayCodec):
         return {"name": self.codec_name, "configuration": config}
 
     @classmethod
+    @override
     def from_dict(cls, data: dict[str, JSON]) -> Self:
         """Reconstruct from Zarr v3 metadata: {'name': ..., 'configuration': {...}}.
 

@@ -21,6 +21,7 @@ binding is pinned to ``nvidia-libnvcomp-cu12 == 5.2.0.13``.
 """
 
 import ctypes
+import itertools
 import struct
 from dataclasses import dataclass
 from functools import cache
@@ -186,6 +187,6 @@ def decode_blosc_batch(comps: list[cp.ndarray], stream: int = 0) -> list[cp.ndar
     batch in sub-batches of ``_MAX_CHUNKS_PER_CALL`` to bound nvCOMP temp.
     """
     out: list[cp.ndarray] = []
-    for i in range(0, len(comps), _MAX_CHUNKS_PER_CALL):
-        out.extend(_decode_subbatch(comps[i : i + _MAX_CHUNKS_PER_CALL], stream))
+    for sub in itertools.batched(comps, _MAX_CHUNKS_PER_CALL):
+        out.extend(_decode_subbatch(list(sub), stream))
     return out

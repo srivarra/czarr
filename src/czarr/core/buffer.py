@@ -19,7 +19,7 @@ through the cupy view first.
 """
 
 from collections.abc import Iterable
-from typing import Any, Literal, Self, cast
+from typing import Any, Literal, Self, cast, override
 
 import cupy as cp
 import numpy as np
@@ -66,17 +66,20 @@ class CzarrGpuBuffer(core.Buffer):
         return cls(cp.empty(size, dtype=cp.uint8))
 
     @classmethod
+    @override
     def create_zero_length(cls) -> Self:
         """Empty 0-byte buffer — no device allocation."""
         return cls(cp.empty(0, dtype=cp.uint8))
 
     @classmethod
+    @override
     def from_array_like(cls, array_like: ArrayLike) -> Self:
         """Wrap a CAI- or DLPack-compatible array zero-copy."""
         src = cp.asarray(array_like).view(cp.uint8).ravel()
         return cls(src)
 
     @classmethod
+    @override
     def from_buffer(cls, buffer: core.Buffer) -> Self:
         """Wrap or copy an arbitrary zarr Buffer; zero-copy when already ours."""
         if isinstance(buffer, cls):
@@ -84,6 +87,7 @@ class CzarrGpuBuffer(core.Buffer):
         return cls.from_array_like(buffer.as_array_like())
 
     @classmethod
+    @override
     def from_bytes(cls, bytes_like: BytesLike) -> Self:
         """Copy host bytes into a fresh aligned device buffer."""
         host = np.frombuffer(bytes_like, dtype=np.uint8)
@@ -97,10 +101,12 @@ class CzarrGpuBuffer(core.Buffer):
     # zarr Buffer protocol
     # ------------------------------------------------------------------
 
+    @override
     def as_numpy_array(self) -> npt.NDArray[Any]:
         """Copy device bytes to a fresh numpy array."""
         return cast("npt.NDArray[Any]", cp.asnumpy(self._data))
 
+    @override
     def combine(self, others: Iterable[core.Buffer]) -> Self:
         """Concatenate self + ``others`` into a fresh aligned device buffer."""
         parts = [self._data]
@@ -168,6 +174,7 @@ class CzarrGpuNDBuffer(core.NDBuffer):
         self._data: NDArrayLike = cp.asarray(array)
 
     @classmethod
+    @override
     def create(
         cls,
         *,
@@ -183,27 +190,33 @@ class CzarrGpuNDBuffer(core.NDBuffer):
         return cls(arr)
 
     @classmethod
+    @override
     def empty(cls, shape: tuple[int, ...], dtype: npt.DTypeLike, order: Literal["C", "F"] = "C") -> Self:
         """Uninitialised cupy-backed ndbuffer."""
         return cls(cp.empty(shape=shape, dtype=dtype, order=order))
 
     @classmethod
+    @override
     def from_numpy_array(cls, array_like: npt.ArrayLike) -> Self:
         """H2D copy via ``cp.asarray``."""
         return cls(cp.asarray(array_like))
 
     @classmethod
+    @override
     def from_ndarray_like(cls, ndarray_like: NDArrayLike) -> Self:
         """Wrap / coerce an existing ndarray-like to cupy."""
         return cls(cp.asarray(ndarray_like))
 
+    @override
     def as_numpy_array(self) -> npt.NDArray[Any]:
         """Copy device data back to numpy."""
         return cast("npt.NDArray[Any]", cp.asnumpy(self._data))
 
+    @override
     def __getitem__(self, key: Any) -> Self:
         return type(self)(self._data.__getitem__(key))
 
+    @override
     def __setitem__(self, key: Any, value: Any) -> None:
         if isinstance(value, CzarrGpuNDBuffer):
             value = value._data
