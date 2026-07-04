@@ -10,19 +10,27 @@ from pathlib import Path
 import pytest
 import zarr
 
+# CUDA context destructors segfault at interpreter exit under gVisor
+# sandboxes (Modal), turning a green suite into SIGSEGV.  Container CI sets
+# CZARR_TEST_HARD_EXIT=1 to exit with pytest's status before those
+# destructors run; normal runs keep full teardown.  The exit happens in
+# pytest_unconfigure (after the terminal reporter prints the summary line);
+# sessionfinish only records the verdict.
+_EXIT_STATUS: int | None = None
+
 
 def pytest_sessionfinish(session, exitstatus):
-    """Optionally skip interpreter teardown once the verdict is decided.
+    """Record pytest's verdict for the hard-exit path."""
+    global _EXIT_STATUS
+    _EXIT_STATUS = int(exitstatus)
 
-    CUDA context destructors segfault at interpreter exit under gVisor
-    sandboxes (Modal), turning a green suite into SIGSEGV.  Container CI
-    sets CZARR_TEST_HARD_EXIT=1 to exit with pytest's status before those
-    destructors run; normal runs keep full teardown.
-    """
-    if os.environ.get("CZARR_TEST_HARD_EXIT") == "1":
+
+def pytest_unconfigure(config):
+    """Skip interpreter teardown once the verdict is decided (opt-in)."""
+    if os.environ.get("CZARR_TEST_HARD_EXIT") == "1" and _EXIT_STATUS is not None:
         sys.stdout.flush()
         sys.stderr.flush()
-        os._exit(int(exitstatus))
+        os._exit(_EXIT_STATUS)
 
 
 # cuFile in compat mode rejects tmpfs/ramfs; force compat path on hosts
