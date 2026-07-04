@@ -14,7 +14,7 @@ ever shows it mattering (see git history).  The ``backend`` field is
 runtime — not persisted in Zarr v3 metadata.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar, Self, override
 
 import cupy as cp
@@ -23,13 +23,14 @@ from zarr.core.array_spec import ArraySpec
 from zarr.core.buffer import Buffer
 from zarr.core.common import JSON
 
-from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
+from czarr.codecs._backend import CodecBackend
 from czarr.codecs.base import codec_config
+from czarr.codecs.filters._base import BackendFilter
 from czarr.kernels.byteshuffle import byteshuffle, byteunshuffle
 
 
 @dataclass(frozen=True)
-class Shuffle(BytesBytesCodec):
+class Shuffle(BackendFilter, BytesBytesCodec):
     """GPU byteshuffle — numcodecs-compatible BytesBytesCodec.
 
     Parameters
@@ -47,16 +48,6 @@ class Shuffle(BytesBytesCodec):
     _default_backend: ClassVar[CodecBackend] = "cupy"
 
     elementsize: int = 4
-    backend: CodecBackend | None = field(default=None, compare=False, repr=True)
-
-    def __post_init__(self) -> None:
-        chosen = resolve_backend_for_filter(
-            self.codec_name,
-            instance_backend=self.backend,
-            supported=self._supported_backends,
-            default=self._default_backend,
-        )
-        object.__setattr__(self, "backend", chosen)
 
     @override
     async def _decode_single(self, chunk_data: Buffer, chunk_spec: ArraySpec) -> Buffer:

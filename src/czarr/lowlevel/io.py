@@ -41,7 +41,7 @@ def read(requests: list[ReadRequest], *, max_workers: int | None = None) -> list
     if not requests:
         return []
     buffers = [cp.empty(r.nbytes, dtype=cp.uint8) for r in requests]
-    with nvtx_range("czarr.lowlevel.read", n=len(requests)):
+    with nvtx_range("czarr.lowlevel.read", color="orange", payload=len(requests)):
         if cufile.is_available():
             try:
                 got = cufile.read_into_many(

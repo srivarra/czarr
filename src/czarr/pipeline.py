@@ -87,7 +87,7 @@ class CzarrPipeline(BatchedCodecPipeline):
         """Run zarr's batched read with a per-microbatch NVTX range."""
         # Materialise so we can count without consuming the iterator twice.
         items = list(batch_info)
-        with nvtx_range("czarr.pipeline.read_batch", n=len(items)):
+        with nvtx_range("czarr.pipeline.read_batch", color="purple", payload=len(items)):
             return await super().read_batch(items, out, drop_axes)
 
     @override
@@ -99,5 +99,5 @@ class CzarrPipeline(BatchedCodecPipeline):
     ) -> None:
         """Run zarr's batched write with a per-microbatch NVTX range."""
         items = list(batch_info)
-        with nvtx_range("czarr.pipeline.write_batch", n=len(items)):
+        with nvtx_range("czarr.pipeline.write_batch", color="purple", payload=len(items)):
             await super().write_batch(items, value, drop_axes)

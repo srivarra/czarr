@@ -2,12 +2,16 @@
 
 import pytest
 
-from czarr.lowlevel.coalesce import (
-    ByteRange,
-    FusedRead,
-    coalesce_ranges,
-    slice_into_outputs,
-)
+from czarr.lowlevel.coalesce import ByteRange, coalesce_ranges
+
+
+def _slice_members(buffers, fused, n_originals):
+    """The production slicing pattern (see sharding + lowlevel.decode)."""
+    out = [None] * n_originals
+    for buf, win in zip(buffers, fused, strict=True):
+        for orig_idx, intra, length in win.members:
+            out[orig_idx] = buf[intra : intra + length]
+    return out
 
 
 class TestCoalesceRanges:
@@ -37,7 +41,6 @@ class TestCoalesceRanges:
         assert out[0].length == 350
         # Members preserve original order via orig_index.
         assert out[0].members == ((0, 0, 100), (1, 100, 200), (2, 300, 50))
-        assert out[0].waste == 0
 
     def test_gap_blocks_fusion_when_max_gap_zero(self) -> None:
         """A 1-byte gap with default max_gap=0 splits the fusion."""
@@ -49,7 +52,7 @@ class TestCoalesceRanges:
         assert len(out) == 2
 
     def test_gap_within_cap_fuses(self) -> None:
-        """A small gap fuses; the un-requested bytes are tracked as waste."""
+        """A small gap within max_gap_bytes fuses into one window."""
         rs = [
             ByteRange(offset=0, length=100),
             ByteRange(offset=200, length=50),
@@ -58,7 +61,6 @@ class TestCoalesceRanges:
         assert len(out) == 1
         assert out[0].offset == 0
         assert out[0].length == 250
-        assert out[0].waste == 100
 
     def test_cap_splits_fusion(self) -> None:
         """``max_fused_bytes`` stops fusion before the cap."""
@@ -148,8 +150,8 @@ class TestCoalesceRanges:
         assert seen == list(range(20))
 
 
-class TestSliceIntoOutputs:
-    """Round-trip: coalesce + read + slice yields the original payloads."""
+class TestMemberSlicing:
+    """Round-trip: coalesce + read + member slicing yields the original payloads."""
 
     def test_round_trip_three_chunks(self) -> None:
         """Simulate a fused read by concatenating chunk bytes."""
@@ -160,7 +162,7 @@ class TestSliceIntoOutputs:
         assert len(fused) == 1
         # Simulated buffer: the bytes the fused read would have returned.
         buffer = b"".join(chunks)
-        out = slice_into_outputs([buffer], fused, n_originals=3)
+        out = _slice_members([buffer], fused, n_originals=3)
         for i, view in enumerate(out):
             assert view is not None
             assert bytes(view) == chunks[i]
@@ -174,9 +176,8 @@ class TestSliceIntoOutputs:
         rs = [ByteRange(offset=0, length=10), ByteRange(offset=20, length=10)]
         fused = coalesce_ranges(rs, max_gap_bytes=16)
         assert len(fused) == 1
-        assert fused[0].waste == 10
         buffer = chunk_a + waste + chunk_b
-        out = slice_into_outputs([buffer], fused, n_originals=2)
+        out = _slice_members([buffer], fused, n_originals=2)
         assert bytes(out[0]) == chunk_a  # type: ignore[arg-type]
         assert bytes(out[1]) == chunk_b  # type: ignore[arg-type]
 
@@ -186,11 +187,6 @@ class TestSliceIntoOutputs:
         rs = [ByteRange(offset=0, length=5), ByteRange(offset=1_000_000, length=5)]
         fused = coalesce_ranges(rs, max_fused_bytes=10, max_gap_bytes=0)
         assert len(fused) == 2
-        out = slice_into_outputs(chunks, fused, n_originals=2)
+        out = _slice_members(chunks, fused, n_originals=2)
         assert bytes(out[0]) == chunks[0]  # type: ignore[arg-type]
         assert bytes(out[1]) == chunks[1]  # type: ignore[arg-type]
-
-    def test_buffers_fused_length_mismatch(self) -> None:
-        fused = [FusedRead(offset=0, length=10, members=((0, 0, 10),))]
-        with pytest.raises(ValueError, match="length"):
-            slice_into_outputs([b"x" * 10, b"y" * 10], fused, n_originals=1)

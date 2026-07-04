@@ -59,7 +59,8 @@ def run_bench(
         for _ in range(reps):
             ctx.sync()
             t0 = time.perf_counter()
-            with span("body", **{k: params[k] for k in list(params)[:3]}):
+            label = "body|" + "|".join(f"{k}={params[k]}" for k in list(params)[:3])
+            with span(label):
                 plan.body()
             ctx.sync()
             samples.append(time.perf_counter() - t0)
