@@ -61,6 +61,11 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           verbose: true
+          # Make full re-runs of a partially-failed release idempotent:
+          # TestPyPI shares PyPI's immutable-filename rule, so a re-upload
+          # of already-accepted files would otherwise 400.  The real PyPI
+          # step stays strict — a duplicate there should fail loudly.
+          skip-existing: true
 
   publish-to-pypi:
     name: >-
