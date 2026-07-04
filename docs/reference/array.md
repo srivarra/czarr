@@ -1,3 +1,10 @@
+---
+icon: lucide/box
+description: CudaZarrArray and the array factories — API reference.
+tags:
+  - API
+---
+
 # czarr.array
 
 Tier 1's array type and factories. `CudaZarrArray` is a `zarr.Array` subclass whose basic-indexing reads route through the lowlevel fast path.

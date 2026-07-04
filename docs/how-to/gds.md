@@ -1,3 +1,11 @@
+---
+icon: lucide/hard-drive
+description: Set up GPUDirect Storage, diagnose compatibility mode, and tune cuFile.
+tags:
+  - GDS
+  - Performance
+---
+
 # GPUDirect Storage setup
 
 cuFile runs in one of two modes. czarr uses whichever the system provides.
@@ -9,17 +17,21 @@ cuFile runs in one of two modes. czarr uses whichever the system provides.
 
 To check the current state:
 
-```python
-from czarr import GPULocalStore
+=== "Python"
 
-store = GPULocalStore("/data/store.zarr")
-print(store.gds_available)    # libcufile loaded and driver opened
-```
+    ```python
+    from czarr import GPULocalStore
 
-```bash
-ls /proc/driver/nvidia-fs                # exists when the kernel module is loaded
-/usr/local/cuda/gds/tools/gdscheck -p    # full platform report, if installed
-```
+    store = GPULocalStore("/data/store.zarr")
+    print(store.gds_available)    # libcufile loaded and driver opened
+    ```
+
+=== "Shell"
+
+    ```bash
+    ls /proc/driver/nvidia-fs                # exists when the kernel module is loaded
+    /usr/local/cuda/gds/tools/gdscheck -p    # full platform report, if installed
+    ```
 
 GDS is faster for large reads. Below roughly 16 MiB per read the pinned path is competitive, and the compatibility fallback is the pinned path, so small-chunk workloads lose little without GDS.
 

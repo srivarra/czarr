@@ -1,3 +1,11 @@
+---
+icon: lucide/database
+description: GPULocalStore and the cuFile runtime — API reference.
+tags:
+  - API
+  - GDS
+---
+
 # czarr.storage & czarr.cufile
 
 ## Store

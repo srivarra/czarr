@@ -1,3 +1,10 @@
+---
+icon: lucide/gauge
+description: Reproduce czarr performance numbers with the czarr-bench CLI.
+tags:
+  - Performance
+---
+
 # Benchmarking with czarr-bench
 
 `czarr-bench` produced every number in these docs. Results append as JSON-lines under `bench/results/`, keyed by `(bench, params, gpu, commit)`.

@@ -1,3 +1,11 @@
+---
+icon: lucide/package
+description: GPU compressors and filters — API reference.
+tags:
+  - API
+  - Codecs
+---
+
 # czarr.codecs
 
 Every codec accepts `chunk_size` (nvCOMP internal chunk, default 64 KiB), `checksum_policy` (default `Checksum.NO_COMPUTE_NO_VERIFY`), `device_id`, and `cuda_stream` (any `__cuda_stream__`-compliant object). Compat codecs additionally accept `level` / `checksum` for metadata round-trip with their CPU equivalents.
