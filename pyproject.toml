@@ -84,6 +84,7 @@ czarr-bench = "czarr.bench.cli:app"
 
 [dependency-groups]
 dev = [
+  "commitizen>=4.16",
   "pre-commit",
   "twine>=4.0.2",
   "ty>=0.0.12",
