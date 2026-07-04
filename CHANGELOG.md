@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codec, pipeline, storage, allocator coverage ([8a6d8a3](https://github.com/srivarra/czarr/commit/8a6d8a32746a69e19a81bf524d9149736782d4e6))
 
 ### 🏗️ CI & build
+- **release:** Derive labels from conventional PR titles ([a933277](https://github.com/srivarra/czarr/commit/a933277c94b00015ec81d1a7a428d2d8e444c9fb))
 - **changelog:** Group by conventional commits; enforce with commitizen ([a372b23](https://github.com/srivarra/czarr/commit/a372b23c80e59ad14a60417a41448d018b59bb78))
 - Derive the version from git tags (hatch-vcs) ([e1e16ac](https://github.com/srivarra/czarr/commit/e1e16acb18ae03cc9320bbd3d9710c39fbf8b22a))
 - **release:** Skip-existing on TestPyPI for idempotent re-runs ([b9aa4c0](https://github.com/srivarra/czarr/commit/b9aa4c0e6ee21323c31650e27577330abad55a14))
