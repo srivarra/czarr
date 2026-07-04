@@ -1,3 +1,10 @@
+---
+icon: lucide/cpu
+description: czarr.core.Array and AsyncArray — API reference.
+tags:
+  - API
+---
+
 # czarr.core
 
 The explicit object API over the lowlevel stages — tier 2.

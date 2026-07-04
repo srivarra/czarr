@@ -1,12 +1,25 @@
+---
+icon: lucide/rocket
+description: Create, write, and read a GPU-compressed Zarr array through both czarr tiers.
+---
+
 # Getting started
 
 This tutorial creates a GPU-compressed Zarr array, writes to it, and reads it back both through zarr and through the explicit API. It assumes a Linux machine with an NVIDIA GPU and CUDA 12 or 13.
 
 ## Install
 
-```bash
-pip install "czarr[cu12]"     # or czarr[cu13]
-```
+=== "CUDA 12"
+
+    ```bash
+    pip install "czarr[cu12]"
+    ```
+
+=== "CUDA 13"
+
+    ```bash
+    pip install "czarr[cu13]"
+    ```
 
 ```python
 import czarr
@@ -25,7 +38,7 @@ This registers the GPU codecs, sets the batched decode pipeline, and switches za
 
 ## Create and write
 
-```python
+```python title="quickstart.py"
 import cupy as cp
 import numpy as np
 

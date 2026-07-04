@@ -8,6 +8,7 @@ site_author = "Sricharan Reddy Varra"
 site_url = "https://czarr.readthedocs.io/"
 repo_url = "https://github.com/srivarra/czarr"
 copyright = "Copyright &copy; 2026 Sricharan Reddy Varra"
+extra_css = [ "stylesheets/pierre.css" ]
 
 nav = [
   { "Home" = "index.md" },
@@ -45,18 +46,42 @@ features = [
   "navigation.sections",
   "navigation.top",
   "navigation.tracking",
+  "content.footnote.tooltips",
   "search.highlight",
 ]
 
+# Palettes follow the system preference; the toggle overrides per visitor.
 [[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
 scheme = "default"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
 scheme = "slate"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"
+
+# Page tags (frontmatter `tags:`); identifiers map tags to icons.
+[project.plugins.tags]
+
+[project.extra.tags]
+GDS = "gds"
+Codecs = "codec"
+API = "api"
+Performance = "perf"
+
+[project.theme.icon.tag]
+default = "lucide/hash"
+gds = "lucide/hard-drive"
+codec = "lucide/package"
+api = "lucide/braces"
+perf = "lucide/gauge"
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
@@ -80,6 +105,8 @@ show_root_heading = true
 members_order = "source"
 separate_signature = true
 show_signature_annotations = true
+show_symbol_type_heading = true
+show_symbol_type_toc = true
 
 [project.markdown_extensions.admonition]
 [project.markdown_extensions.attr_list]

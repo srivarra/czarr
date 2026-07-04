@@ -1,3 +1,10 @@
+---
+icon: lucide/wrench
+description: The staged read plumbing — planning, coalescing, I/O, decode.
+tags:
+  - API
+---
+
 # czarr.lowlevel
 
 The staged read plumbing. Each stage is callable and benchable on its own; `read_array` composes them.

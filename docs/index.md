@@ -1,3 +1,8 @@
+---
+icon: lucide/house
+description: GPU-native reading and writing of Zarr v3 arrays — nvCOMP codecs, GPUDirect Storage, and an explicit low-level read path.
+---
+
 # czarr
 
 czarr reads and writes Zarr v3 arrays on NVIDIA GPUs. Compression runs through nvCOMP, file I/O runs through cuFile (GPUDirect Storage where the system supports it), and reads return `cupy.ndarray`.
@@ -23,7 +28,41 @@ out = arr[0:4, :, 8:24]
 
 `CudaZarrArray`, returned by the czarr factories, connects the two: basic-indexing reads go through a cached `core.Array`, everything else through zarr.
 
-New users should start with [Getting started](getting-started.md). The design rationale is in [Architecture](explanation/architecture.md).
+<div class="grid cards" markdown>
+
+- **Getting started**
+
+    ---
+
+    Create, write, and read a GPU-compressed array through both tiers.
+
+    [Getting started](getting-started.md)
+
+- **How-to guides**
+
+    ---
+
+    CPU-store decode, explicit reads, GPUDirect Storage setup, benchmarking.
+
+    [GPU-decode existing stores](how-to/read-cpu-stores.md)
+
+- **Architecture**
+
+    ---
+
+    Why two tiers, how a read flows, and which designs were measured out.
+
+    [The two-tier architecture](explanation/architecture.md)
+
+- **API reference**
+
+    ---
+
+    Signatures and behavior, rendered from the docstrings.
+
+    [czarr reference](reference/czarr.md)
+
+</div>
 
 ## Installation
 

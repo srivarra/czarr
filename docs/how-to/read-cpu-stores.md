@@ -1,3 +1,10 @@
+---
+icon: lucide/refresh-cw
+description: Decode existing CPU-written zarr stores on the GPU without migration.
+tags:
+  - Codecs
+---
+
 # GPU-decode existing CPU stores
 
 A zarr store written with CPU codecs (numcodecs or `zarr.codecs`) can be decoded on the GPU without migration or re-encoding.

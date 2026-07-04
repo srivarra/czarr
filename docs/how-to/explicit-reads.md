@@ -1,3 +1,10 @@
+---
+icon: lucide/layers
+description: Read zarr arrays with czarr.core.Array and czarr.lowlevel — per-call options, async, no global state.
+tags:
+  - API
+---
+
 # Explicit reads
 
 `czarr.core.Array` and `czarr.lowlevel` read zarr arrays without touching zarr's global configuration. Use them in library code that must not mutate process-wide state, in hot loops that read one array many times, and when a single pipeline stage needs to be run or measured in isolation.
