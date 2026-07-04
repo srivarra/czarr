@@ -37,16 +37,21 @@ optional-dependencies.cu12 = [
   "cupy-cuda12x>=13.6",
   "nvidia-cuda-nvrtc-cu12>=12.9.86",
   "nvidia-cuda-runtime-cu12>=12.9.79",
+  "nvidia-cufile-cu12>=1.13",
   "nvidia-nvcomp-cu12>=5.1.0.21",
   "rmm-cu12>=26",
   "nsight-python[cu12]>=0.9.6",
 ]
+# CUDA 13 dropped the -cu13 wheel suffix: nvidia-cuda-runtime, nvidia-cuda-nvrtc
+# and nvidia-cufile are the real packages (the -cu13 names on PyPI are 0.0.1
+# anti-squatting placeholders that fail to build). nvcomp kept the suffix.
 optional-dependencies.cu13 = [
   "cuda-core>=1.0",
   "cuda-python>=13",
   "cupy-cuda13x>=13.6",
-  "nvidia-cuda-nvrtc-cu13",
-  "nvidia-cuda-runtime-cu13",
+  "nvidia-cuda-nvrtc>=13",
+  "nvidia-cuda-runtime>=13",
+  "nvidia-cufile>=1.15",
   "nvidia-nvcomp-cu13>=5.1.0.21",
   "rmm-cu13>=26",
   "nsight-python[cu13]>=0.9.6",
