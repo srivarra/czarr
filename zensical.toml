@@ -22,6 +22,7 @@ nav = [
   { "Explanation" = [
     { "The two-tier architecture" = "explanation/architecture.md" },
   ] },
+  { "Changelog" = "changelog.md" },
   { "API reference" = [
     { "czarr (top level)" = "reference/czarr.md" },
     { "czarr.codecs" = "reference/codecs.md" },
@@ -123,6 +124,10 @@ line_spans = "__span"
 pygments_lang_class = true
 [project.markdown_extensions.pymdownx.inlinehilite]
 [project.markdown_extensions.pymdownx.magiclink]
+[project.markdown_extensions.pymdownx.snippets]
+# resolve --8<-- includes from the repo root, so docs pages can embed
+# top-level files like CHANGELOG.md without copies
+base_path = ["."]
 [project.markdown_extensions.pymdownx.superfences]
 [project.markdown_extensions.pymdownx.tabbed]
 alternate_style = true
