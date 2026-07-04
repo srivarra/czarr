@@ -26,3 +26,6 @@ jobs:
       - uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
         with:
           persona: pedantic
+          # SARIF upload needs code scanning, which private repos lack
+          # without Advanced Security.  Flip to true when the repo is public.
+          advanced-security: false

@@ -26,13 +26,17 @@ Usage::
 import os
 from contextlib import contextmanager
 
+# All nvtx references live inside the try so the module name is never
+# rebound (typing stays environment-independent); ``_DOMAIN is None``
+# encodes both "nvtx missing" and "CZARR_NVTX=0".
+_DOMAIN = None
 try:
     import nvtx
-except ImportError:  # pragma: no cover — nvtx rides the cu12/cu13 extras
-    nvtx = None  # ty: ignore[invalid-assignment] — optional-module idiom
 
-_ENABLED = os.environ.get("CZARR_NVTX", "1") != "0" and nvtx is not None
-_DOMAIN = nvtx.get_domain("czarr") if _ENABLED else None
+    if os.environ.get("CZARR_NVTX", "1") != "0":
+        _DOMAIN = nvtx.get_domain("czarr")
+except ImportError:  # pragma: no cover — nvtx rides the cu12/cu13 extras
+    pass
 
 
 @contextmanager
@@ -52,7 +56,7 @@ def nvtx_range(
     thread-local push/pop, so interleaved asyncio tasks on the event-loop
     thread cannot corrupt each other's range stack.
     """
-    if not _ENABLED:
+    if _DOMAIN is None:
         yield
         return
     label = name
@@ -67,5 +71,5 @@ def nvtx_range(
 
 def mark(name: str, *, color: str = "blue", payload: int | float | None = None) -> None:
     """Drop a one-shot timeline marker in the czarr domain."""
-    if _ENABLED:
+    if _DOMAIN is not None:
         _DOMAIN.mark(message=name, color=color, payload=payload)
