@@ -9,6 +9,9 @@ build:
       - asdf plugin add uv
       - asdf install uv latest
       - asdf global uv latest
+    post_checkout:
+      # hatch-vcs needs tags; RTD clones shallow.
+      - git fetch --unshallow --tags || true
     build:
       html:
         # cu12 extra: mkdocstrings imports czarr for the API reference

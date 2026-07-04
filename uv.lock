@@ -864,7 +864,6 @@ wheels = [
 
 [[package]]
 name = "czarr"
-version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "session-info2" },
@@ -938,7 +937,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'bench'", specifier = ">=0.12" },
     { name = "zarr", specifier = ">=3.2.1" },
 ]
-provides-extras = ["cu12", "cu13", "bench"]
+provides-extras = ["bench", "cu12", "cu13"]
 
 [package.metadata.requires-dev]
 dev = [
