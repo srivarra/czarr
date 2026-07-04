@@ -98,7 +98,6 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          MODAL_ENVIRONMENT: ci
           GPU: ${{ matrix.gpu }}
           CUDA: ${{ matrix.cuda }}
         run: uvx modal run ci/modal_ci.py --gpu "$GPU" --extra "$CUDA"
