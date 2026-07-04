@@ -1,10 +1,10 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = [ "hatchling" ]
+requires = [ "hatch-vcs", "hatchling" ]
 
 [project]
 name = "czarr"
-version = "0.0.1"
+dynamic = [ "version" ]
 description = "Decompress / Compress Zarr on the GPU"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -101,6 +101,12 @@ doc = [
   "zensical>=0.0.46",
 ]
 
+# Version comes from the latest v* git tag (hatch-vcs / setuptools-scm):
+# tagged commits build the exact tag version, untagged commits build
+# 0.x.devN+g<hash>.  Publishing a GitHub release is the version bump.
+[tool.hatch.version]
+source = "vcs"
+
 [tool.hatch.envs.default]
 installer = "uv"
 dependency-groups = [ "dev" ]
@@ -145,6 +151,9 @@ matrix.deps.env-vars = [
 [tool.uv]
 # doc included so `uv run zensical serve` works without --group juggling.
 default-groups = [ "dev", "doc" ]
+# Rebuild the editable install's metadata when commits/tags change, so
+# czarr.__version__ tracks hatch-vcs instead of uv's cached build.
+cache-keys = [ { file = "pyproject.toml" }, { git = { commit = true, tags = true } } ]
 conflicts = [
   [
     { extra = "cu12" },
