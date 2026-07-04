@@ -29,7 +29,7 @@ quantisation boundaries.
 ``backend`` is runtime and not persisted in Zarr v3 metadata.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar, Self, override
 
 import cupy as cp
@@ -39,12 +39,13 @@ from zarr.core.array_spec import ArraySpec
 from zarr.core.buffer import NDBuffer
 from zarr.core.common import JSON
 
-from czarr.codecs._backend import CodecBackend, resolve_backend_for_filter
+from czarr.codecs._backend import CodecBackend
 from czarr.codecs.base import codec_config
+from czarr.codecs.filters._base import BackendFilter
 
 
 @dataclass(frozen=True)
-class FixedScaleOffset(ArrayArrayCodec):
+class FixedScaleOffset(BackendFilter, ArrayArrayCodec):
     """GPU affine-quantisation filter — numcodecs-compatible ArrayArrayCodec.
 
     Parameters
@@ -73,16 +74,6 @@ class FixedScaleOffset(ArrayArrayCodec):
     scale: float = 1.0
     dtype: DTypeLike = "<f4"
     astype: DTypeLike | None = None
-    backend: CodecBackend | None = field(default=None, compare=False, repr=True)
-
-    def __post_init__(self) -> None:
-        chosen = resolve_backend_for_filter(
-            self.codec_name,
-            instance_backend=self.backend,
-            supported=self._supported_backends,
-            default=self._default_backend,
-        )
-        object.__setattr__(self, "backend", chosen)
 
     @property
     def _store_dtype(self) -> DTypeLike:

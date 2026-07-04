@@ -1,27 +1,32 @@
-"""``CudaZarrArray`` — :class:`zarr.Array` with a lowlevel GPU fast path.
+"""GPU-resident Zarr Array facade — ``CudaZarrArray`` and its factories.
 
-Reads that ``czarr.lowlevel`` can serve — basic indexing on a
-local-store zarr v3 array whose codec chain is in the v1 decode scope —
-route through a cached :class:`czarr.core.Array` (derive-once metadata,
-coalesced cuFile reads, one batched GPU decode) and return
-``cupy.ndarray``.  Everything else falls back to zarr's own machinery
-unchanged: fancy indexing, unsupported codecs, non-local stores, and
-all writes.  The fallback's return type follows the active buffer
-prototype (``cupy`` after :func:`czarr.configure_gpu`, numpy otherwise).
+* :class:`CudaZarrArray` — :class:`zarr.Array` subclass returned by the
+  factories; basic-indexing reads route through the lowlevel fast path
+  (a cached :class:`czarr.core.Array`), everything else falls back to
+  zarr's machinery.
+* :func:`open_cuda_array` — open an existing array path and wrap it.
+* :func:`create_cuda_array` — create + wrap in one call.
 
-Construction is through :meth:`CudaZarrArray.wrap` or the factories —
-the constructor exists for parity with :class:`zarr.Array` but is not
-the documented path.
+The factories mirror :func:`zarr.open_array` / :func:`zarr.create_array`
+signatures where possible and wrap string/``Path`` stores in
+:class:`czarr.GPULocalStore`, so the cuFile read path is the default.
+The fallback read path's return type follows the active buffer prototype
+(``cupy`` after :func:`czarr.configure_gpu`, numpy otherwise).
 """
 
 from pathlib import Path
-from typing import Any, Self, override
+from typing import Any, Literal, Self, override
 
 import numpy as np
+import numpy.typing as npt
 import zarr
+import zarr.abc.store
 from zarr.storage import LocalStore
 
 from czarr.core.array import Array as CoreArray
+from czarr.storage import GPULocalStore
+
+__all__ = ["CudaZarrArray", "create_cuda_array", "open_cuda_array"]
 
 # ``zarr.Array`` is a frozen dataclass, so the memo lives in __dict__
 # directly: (metadata_object, CoreArray | None).  ``None`` records
@@ -103,3 +108,74 @@ class CudaZarrArray(zarr.Array):
         """Write through zarr; drop the cached plan (shard indexes may change)."""
         self.__dict__.pop(_FAST_CACHE, None)
         super().__setitem__(selection, value)
+
+
+def _resolve_store(
+    store_or_path: zarr.abc.store.Store | str | Path,
+    *,
+    mode: str,
+) -> zarr.abc.store.Store:
+    """Auto-wrap string/Path inputs in :class:`GPULocalStore`.
+
+    A :class:`Store` instance passes through unchanged — explicit user
+    choice (e.g. ``MemoryStore()`` for hermetic tests).
+    """
+    if isinstance(store_or_path, (str, Path)):
+        return GPULocalStore(str(store_or_path), read_only=(mode == "r"))
+    return store_or_path
+
+
+def open_cuda_array(
+    store: zarr.abc.store.Store | str | Path,
+    *,
+    path: str | None = None,
+    mode: Literal["r", "r+", "a", "w", "w-"] = "r",
+) -> CudaZarrArray:
+    """Open an existing array and wrap it as :class:`CudaZarrArray`.
+
+    A string or :class:`pathlib.Path` is automatically wrapped in
+    :class:`czarr.GPULocalStore` so the cuFile read path is the default;
+    pass a :class:`zarr.abc.store.Store` instance to opt into a different
+    backend.
+    """
+    resolved = _resolve_store(store, mode=mode)
+    arr = zarr.open_array(store=resolved, path=path or "", mode=mode)
+    return CudaZarrArray.wrap(arr)
+
+
+def create_cuda_array(
+    store: zarr.abc.store.Store | str | Path,
+    *,
+    shape: tuple[int, ...],
+    dtype: npt.DTypeLike,
+    chunks: tuple[int, ...] | Literal["auto"] = "auto",
+    compressors: list[Any] | Literal["auto"] | None = "auto",
+    filters: list[Any] | Literal["auto"] | None = "auto",
+    fill_value: Any | None = None,
+    overwrite: bool = False,
+    path: str | None = None,
+) -> CudaZarrArray:
+    """Create + wrap in one call.
+
+    Mirrors :func:`zarr.create_array`'s positional/kwarg signature for
+    the fields czarr users typically touch.  String/``Path`` ``store``
+    arguments are auto-wrapped in :class:`czarr.GPULocalStore`; pass an
+    explicit store instance to opt into a different backend.  Less-common
+    kwargs (storage options, codec pipeline overrides, etc.) are not
+    threaded — use :func:`zarr.create_array` + :meth:`CudaZarrArray.wrap`
+    for those.
+    """
+    # Create mode — ``read_only=False`` regardless of the requested ``mode``.
+    resolved = _resolve_store(store, mode="w")
+    arr = zarr.create_array(
+        store=resolved,
+        shape=shape,
+        dtype=dtype,
+        chunks=chunks,
+        compressors=compressors,
+        filters=filters,
+        fill_value=fill_value,
+        overwrite=overwrite,
+        name=path,
+    )
+    return CudaZarrArray.wrap(arr)
