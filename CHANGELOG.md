@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codec, pipeline, storage, allocator coverage ([8a6d8a3](https://github.com/srivarra/czarr/commit/8a6d8a32746a69e19a81bf524d9149736782d4e6))
 
 ### 🏗️ CI & build
+- Run the autolabeler sub-action on PR events ([03e5aad](https://github.com/srivarra/czarr/commit/03e5aad81e53ed9e06b9ccdd7011205a123f4e26))
 - **release:** Derive labels from conventional PR titles ([a933277](https://github.com/srivarra/czarr/commit/a933277c94b00015ec81d1a7a428d2d8e444c9fb))
 - **changelog:** Group by conventional commits; enforce with commitizen ([a372b23](https://github.com/srivarra/czarr/commit/a372b23c80e59ad14a60417a41448d018b59bb78))
 - Derive the version from git tags (hatch-vcs) ([e1e16ac](https://github.com/srivarra/czarr/commit/e1e16acb18ae03cc9320bbd3d9710c39fbf8b22a))
