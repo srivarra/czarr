@@ -50,11 +50,24 @@ def _close() -> None:
     _opened = False
 
 
+def _disabled() -> bool:
+    # Kill-switch for hosts where cuFileDriverOpen never returns instead of
+    # erroring (observed under gVisor sandboxes, e.g. Modal containers).
+    # Reads fall back to host I/O + H2D via lowlevel.io.
+    return os.environ.get("CZARR_CUFILE", "1") == "0"
+
+
 def ensure_driver_open() -> None:
-    """Open the cuFile driver exactly once per process. Idempotent + thread-safe."""
+    """Open the cuFile driver exactly once per process. Idempotent + thread-safe.
+
+    Raises ``RuntimeError`` when cuFile is disabled via ``CZARR_CUFILE=0``.
+    """
     global _opened
     if _opened:
         return
+    if _disabled():
+        msg = "cuFile disabled via CZARR_CUFILE=0"
+        raise RuntimeError(msg)
     with _lock:
         if _opened:
             return
@@ -64,7 +77,12 @@ def ensure_driver_open() -> None:
 
 
 def is_available() -> bool:
-    """Return True when cuFile can be opened on this host (real GDS or compat)."""
+    """Return True when cuFile can be opened on this host (real GDS or compat).
+
+    ``CZARR_CUFILE=0`` forces False without touching the driver.
+    """
+    if _disabled():
+        return False
     try:
         ensure_driver_open()
     except Exception:  # noqa: BLE001 — opaque cuFile failures => unavailable

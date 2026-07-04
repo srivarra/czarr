@@ -1,0 +1,105 @@
+name: GPU
+
+# GPU tests cost Modal credits, so nothing here runs automatically — not
+# even on main.  Runs are opt-in one-shots (anndata-style): applying a
+# trigger label fires the workflow, triage removes the label, and further
+# pushes cost nothing until someone labels again.
+#
+#   run-gpu-ci      T4 x {cu12, cu13}          (~$0.12)
+#   run-gpu-matrix  7 GPUs x {cu12, cu13}      (~$3)
+#   workflow_dispatch: free choice of lane
+#
+# Deliberately NOT part of the required alls-green check — an opt-in job
+# cannot be required.  The CPU-safe tests remain the merge gate.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      gpu:
+        description: GPU type
+        type: choice
+        options: [all, T4, L4, A10, A100-40GB, "H100!", B200, RTX-PRO-6000]
+        default: T4
+      cuda:
+        description: CUDA lane
+        type: choice
+        options: [both, cu12, cu13]
+        default: cu12
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    name: Resolve GPU lanes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'run-gpu-ci' ||
+      github.event.label.name == 'run-gpu-matrix'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write # remove the one-shot trigger label
+    outputs:
+      lanes: ${{ steps.lanes.outputs.lanes }}
+    env:
+      LABEL: ${{ github.event.label.name }}
+      GPU_INPUT: ${{ inputs.gpu }}
+      CUDA_INPUT: ${{ inputs.cuda }}
+    steps:
+      - name: Remove one-shot trigger label
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr -R "$GITHUB_REPOSITORY" edit "$PR" --remove-label "$LABEL"
+
+      - name: Compute lane matrix
+        id: lanes
+        run: |
+          all_gpus='["T4","L4","A10","A100-40GB","H100!","B200","RTX-PRO-6000"]'
+          both='["cu12","cu13"]'
+          case "$LABEL" in
+            run-gpu-ci) gpus='["T4"]' cudas="$both" ;;
+            run-gpu-matrix) gpus="$all_gpus" cudas="$both" ;;
+            *)
+              if [ "$GPU_INPUT" = all ]; then gpus="$all_gpus"; else gpus="[\"$GPU_INPUT\"]"; fi
+              if [ "$CUDA_INPUT" = both ]; then cudas="$both"; else cudas="[\"$CUDA_INPUT\"]"; fi
+              ;;
+          esac
+          lanes=$(jq -nc --argjson g "$gpus" --argjson c "$cudas" \
+            '[ $g[] as $gpu | $c[] as $cuda | {gpu: $gpu, cuda: $cuda} ]')
+          echo "lanes=$lanes" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: GPU ${{ matrix.gpu }} / ${{ matrix.cuda }}
+    needs: triage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # top-level {} strips even checkout on a private repo
+    # GitHub environment holding MODAL_TOKEN_ID / MODAL_TOKEN_SECRET;
+    # fork PRs cannot read it.
+    environment: modal-ci
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.triage.outputs.lanes) }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Run suite on Modal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          GPU: ${{ matrix.gpu }}
+          CUDA: ${{ matrix.cuda }}
+        run: uvx modal run ci/modal_ci.py --gpu "$GPU" --extra "$CUDA"

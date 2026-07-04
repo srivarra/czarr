@@ -2,12 +2,36 @@
 
 import os
 import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import pytest
 import zarr
+
+# CUDA context destructors segfault at interpreter exit under gVisor
+# sandboxes (Modal), turning a green suite into SIGSEGV.  Container CI sets
+# CZARR_TEST_HARD_EXIT=1 to exit with pytest's status before those
+# destructors run; normal runs keep full teardown.  The exit happens in
+# pytest_unconfigure (after the terminal reporter prints the summary line);
+# sessionfinish only records the verdict.
+_EXIT_STATUS: int | None = None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Record pytest's verdict for the hard-exit path."""
+    global _EXIT_STATUS
+    _EXIT_STATUS = int(exitstatus)
+
+
+def pytest_unconfigure(config):
+    """Skip interpreter teardown once the verdict is decided (opt-in)."""
+    if os.environ.get("CZARR_TEST_HARD_EXIT") == "1" and _EXIT_STATUS is not None:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(_EXIT_STATUS)
+
 
 # cuFile in compat mode rejects tmpfs/ramfs; force compat path on hosts
 # without nvidia_fs so cuFile-dependent tests still run on tmpfs-free
@@ -19,8 +43,11 @@ if not Path("/proc/driver/nvidia-fs").exists():
 # pytest's default tmp_path is on /tmp (tmpfs on many hosts), which
 # cuFile cannot use even in compat mode (udev attrs are unavailable for
 # tmpfs).  Anchor cuFile-using tests in a dedicated real-FS dir outside
-# the repo tree, swept of stale leftovers once per session.
-_GPUSTORE_TMP_PARENT = Path(f"/hpc/mydata/{os.environ.get('USER', 'nobody')}/.czarr-test-tmp")
+# the repo tree, swept of stale leftovers once per session.  Container CI
+# (Modal) points CZARR_TEST_TMP at container-local disk instead.
+_GPUSTORE_TMP_PARENT = Path(
+    os.environ.get("CZARR_TEST_TMP") or f"/hpc/mydata/{os.environ.get('USER', 'nobody')}/.czarr-test-tmp"
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
