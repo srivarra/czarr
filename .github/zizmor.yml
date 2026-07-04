@@ -28,6 +28,11 @@ rules:
   artipacked:
     ignore:
       - changelog.yaml
+  # peter-evans/create-pull-request is a deliberate choice over hand-rolled
+  # `gh pr create` scripting in the auto-update workflow.
+  superfluous-actions:
+    ignore:
+      - prek-autoupdate.yaml
   # Requiring an explicit name on every job/step is stylistic noise.
   anonymous-definition:
     disable: true
