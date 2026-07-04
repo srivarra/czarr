@@ -93,7 +93,9 @@ def _run_suite() -> None:
     import os
     import subprocess
 
-    env = os.environ | {"SETUPTOOLS_SCM_PRETEND_VERSION_FOR_CZARR": "0.0.0"}
+    # hatch-vcs calls setuptools-scm without a dist name, so only the
+    # generic (unsuffixed) pretend-version variable is honoured.
+    env = os.environ | {"SETUPTOOLS_SCM_PRETEND_VERSION": "0.0.0"}
     subprocess.run(
         ["uv", "pip", "install", "--python", f"{VENV}/bin/python", "--no-deps", "--no-build-isolation", "."],
         check=True,
