@@ -79,6 +79,8 @@ jobs:
     name: GPU ${{ matrix.gpu }} / ${{ matrix.cuda }}
     needs: triage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # top-level {} strips even checkout on a private repo
     # GitHub environment holding MODAL_TOKEN_ID / MODAL_TOKEN_SECRET;
     # fork PRs cannot read it.
     environment: modal-ci
