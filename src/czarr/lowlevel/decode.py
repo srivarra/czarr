@@ -102,7 +102,7 @@ def decode(
         if out.shape != out_shape or out.dtype != plan.dtype:
             raise ValueError(f"out must be shape {out_shape} dtype {plan.dtype}, got {out.shape} {out.dtype}")
     ctx = cp.cuda.ExternalStream(stream) if stream is not None else cp.cuda.get_current_stream()
-    with ctx, nvtx_range("czarr.lowlevel.decode", n=sum(len(r.members) for r in requests)):
+    with ctx, nvtx_range("czarr.lowlevel.decode", payload=sum(len(r.members) for r in requests)):
         result = _decode_sync(plan, requests, buffers, bounds, out)
     ctx.synchronize()
     return result
@@ -134,19 +134,19 @@ def _decode_sync(
     elif chain.compressor == "blosc":
         from czarr.lowlevel.blosc import decode_blosc_batch
 
-        with nvtx_range("czarr.lowlevel.decode.blosc", n=len(encoded)):
+        with nvtx_range("czarr.lowlevel.decode.blosc", payload=len(encoded)):
             decoded = decode_blosc_batch(encoded, int(cp.cuda.get_current_stream().ptr))
     elif chain.compressor is not None:
         codec = _nvcomp_codec(chain.compressor)
         outs = [cp.empty(chunk_nbytes, dtype=cp.uint8) for _ in encoded]
-        with nvtx_range("czarr.lowlevel.decode.nvcomp", n=len(encoded), algo=chain.compressor):
+        with nvtx_range("czarr.lowlevel.decode.nvcomp", category=str(chain.compressor), payload=len(encoded)):
             codec.decode([nvcomp.as_array(e) for e in encoded], out=outs)
         decoded = outs
     else:
         decoded = list(encoded)
 
     if chain.shuffle_elementsize is not None:
-        with nvtx_range("czarr.lowlevel.decode.unshuffle", n=len(decoded)):
+        with nvtx_range("czarr.lowlevel.decode.unshuffle", payload=len(decoded)):
             decoded = [byteunshuffle(d, chain.shuffle_elementsize, int(d.size)) for d in decoded]
 
     # Scatter into the output selection (ndim-preserving shape).
@@ -160,7 +160,7 @@ def _decode_sync(
     elif len(units) < n_selected:
         out.fill(plan.fill_value)
 
-    with nvtx_range("czarr.lowlevel.decode.scatter", n=len(units)):
+    with nvtx_range("czarr.lowlevel.decode.scatter", payload=len(units)):
         for coords, flat in zip(units, decoded, strict=True):
             if flat.size != chunk_nbytes:
                 raise ValueError(f"chunk {coords}: decoded {flat.size} bytes, expected {chunk_nbytes}")

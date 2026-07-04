@@ -53,7 +53,7 @@ def _gds_get_sync(path: Path, prototype: BufferPrototype, byte_range: ByteReques
     offset, size = _resolve_byte_range(byte_range, st.st_size)
     if size == 0:
         return prototype.buffer.create_zero_length()
-    with nvtx_range("czarr.GPULocalStore.cufile_read", size=size):
+    with nvtx_range("czarr.GPULocalStore.cufile_read", color="yellow", payload=size):
         dev = cp.empty(size, dtype=cp.uint8)
         n = cufile.read_into(path, int(dev.data.ptr), size, offset)
     if n != size:
@@ -72,7 +72,7 @@ def _gds_set_sync(path: Path, value: Buffer) -> None:
         # cuFile cannot write zero bytes; touch the file instead.
         path.touch()
         return
-    with nvtx_range("czarr.GPULocalStore.cufile_write", size=nbytes):
+    with nvtx_range("czarr.GPULocalStore.cufile_write", color="yellow", payload=nbytes):
         cufile.write_from(path, int(arr.data.ptr), nbytes, 0)
 
 
