@@ -1,8 +1,13 @@
 """NVTX range markers for nsys / Nsight profiling.
 
-Wraps cupy's NVTX bindings as a context manager.  All ranges are no-ops
-when ``CZARR_NVTX=0`` is set (default: enabled), which lets us leave the
-markers in the hot path with zero overhead in production.
+Wraps NVIDIA's ``nvtx`` package (in the tree via ``nsight-python``) as a
+context manager.  All czarr ranges live in a dedicated ``czarr`` NVTX
+domain, so nsys timelines show them on their own row, filterable from
+cupy/cuDF ranges in the default domain.
+
+Ranges are no-ops when ``CZARR_NVTX=0`` is set (default: enabled), and
+NVTX itself is a no-op unless a profiler is attached, so the markers
+stay in the hot path.
 
 Usage::
 
@@ -15,13 +20,17 @@ Usage::
 import os
 from contextlib import contextmanager
 
-import cupy as cp
+try:
+    import nvtx
+except ImportError:  # pragma: no cover — nvtx rides the cu12/cu13 extras
+    nvtx = None  # ty: ignore[invalid-assignment] — optional-module idiom
 
-_ENABLED = os.environ.get("CZARR_NVTX", "1") != "0"
+_ENABLED = os.environ.get("CZARR_NVTX", "1") != "0" and nvtx is not None
+_DOMAIN = "czarr"
 
 
 @contextmanager
-def nvtx_range(name: str, **fields):
+def nvtx_range(name: str, *, color: str = "green", **fields):
     """Push an NVTX range that shows up in nsys timelines.
 
     ``fields`` are concatenated into the range name as ``name|k=v|k=v``
@@ -34,14 +43,17 @@ def nvtx_range(name: str, **fields):
     label = name
     if fields:
         label += "|" + "|".join(f"{k}={v}" for k, v in fields.items())
-    cp.cuda.nvtx.RangePush(label)
+    # start/end ranges are process-scope (not thread-local push/pop), so
+    # interleaved asyncio tasks on the event-loop thread can't corrupt
+    # each other's range stack.
+    handle = nvtx.start_range(message=label, color=color, domain=_DOMAIN)
     try:
         yield
     finally:
-        cp.cuda.nvtx.RangePop()
+        nvtx.end_range(handle)
 
 
 def mark(name: str) -> None:
     """Drop a one-shot timeline marker."""
     if _ENABLED:
-        cp.cuda.nvtx.Mark(name)
+        nvtx.mark(message=name, domain=_DOMAIN)
