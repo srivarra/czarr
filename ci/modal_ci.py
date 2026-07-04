@@ -66,6 +66,23 @@ def _image(extra: str) -> modal.Image:
     )
 
 
+# Runs under the venv python (the CUDA packages are not importable from the
+# container's system python, which executes this module).
+_PROBE_SNIPPET = """
+try:
+    from cuda.bindings import driver
+    driver.cuInit(0)
+    attr = getattr(driver.CUdevice_attribute, "CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_ALGORITHM_MASK", None)
+    if attr is None:
+        print("decompression engine: attribute not in these bindings")
+    else:
+        _, mask = driver.cuDeviceGetAttribute(attr, 0)
+        print(f"decompression engine mask: {mask} ({'present' if mask else 'absent'})")
+except Exception as exc:
+    print(f"probe skipped: {exc}")
+"""
+
+
 def _probe() -> None:
     """Print which hardware path this lane actually exercised."""
     import subprocess
@@ -74,18 +91,7 @@ def _probe() -> None:
         ["nvidia-smi", "--query-gpu=name,driver_version,compute_cap", "--format=csv"],
         check=False,
     )
-    try:
-        from cuda.bindings import driver
-
-        driver.cuInit(0)
-        attr = getattr(driver.CUdevice_attribute, "CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_ALGORITHM_MASK", None)
-        if attr is None:
-            print("decompression engine: attribute not in these bindings")
-        else:
-            _, mask = driver.cuDeviceGetAttribute(attr, 0)
-            print(f"decompression engine mask: {mask} ({'present' if mask else 'absent'})")
-    except Exception as exc:  # noqa: BLE001 — diagnostics must not fail the lane
-        print(f"probe skipped: {exc}")
+    subprocess.run([f"{VENV}/bin/python", "-c", _PROBE_SNIPPET], check=False)
 
 
 def _run_suite() -> None:
@@ -105,11 +111,13 @@ def _run_suite() -> None:
     _probe()
     test_tmp = "/root/czarr-test-tmp"
     Path(test_tmp).mkdir(exist_ok=True)
+    # Unbuffered so the dot-progress line streams instead of arriving in
+    # 72-char chunks; faulthandler dumps the stack of any test stuck >120s.
     subprocess.run(
-        [f"{VENV}/bin/python", "-m", "pytest", "tests/", "-q"],
+        [f"{VENV}/bin/python", "-u", "-m", "pytest", "tests/", "-q", "--faulthandler-timeout=120"],
         check=True,
         cwd=REMOTE_ROOT,
-        env=env | {"CZARR_TEST_TMP": test_tmp},
+        env=env | {"CZARR_TEST_TMP": test_tmp, "PYTHONUNBUFFERED": "1"},
     )
 
 
