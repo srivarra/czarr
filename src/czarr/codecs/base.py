@@ -259,7 +259,7 @@ class CudaBytesBytesCodec(BytesBytesCodec):
         items: list[tuple[Buffer | None, ArraySpec]],
         op: str,
     ) -> list[Buffer | None]:
-        with nvtx_range(f"czarr.codec.{op}", n=len(items), algo=str(self._algorithm)):
+        with nvtx_range(f"czarr.codec.{op}", color="cyan", category=str(self._algorithm), payload=len(items)):
             non_null_indices: list[int] = []
             specs: list[ArraySpec] = []
             originals: list[Buffer] = []

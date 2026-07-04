@@ -13,7 +13,7 @@ byte cap; the caller slices originals out of the fused buffer.
 This is purely the planning step — the read itself happens elsewhere.
 The algorithm mirrors damacy's ``coalesce_chunks`` (see
 ``src/planner/coalesce.h`` upstream): sort → greedy fuse with a cap →
-return fused windows + a per-request slicer.
+return fused windows with a per-request member map.
 
 Performance gain comes from three places, ordered by importance:
 
@@ -51,15 +51,11 @@ class FusedRead:
     ``members`` lists ``(orig_index, intra_offset, length)`` tuples — the
     caller slices ``buffer[intra_offset : intra_offset + length]`` to
     recover request ``orig_index``'s payload.
-
-    ``waste`` is bytes inside the fused window that no original request
-    asked for.  A pure scheduler metric; not used at slice time.
     """
 
     offset: int
     length: int
     members: tuple[tuple[int, int, int], ...] = field(default_factory=tuple)
-    waste: int = 0
 
     @property
     def end(self) -> int:
@@ -117,20 +113,12 @@ def coalesce_ranges(
     cur_offset = 0
     cur_end = 0
     cur_members: list[tuple[int, int, int]] = []
-    cur_waste = 0
     cur_open = False
 
     def _emit() -> None:
         if not cur_open:
             return
-        fused.append(
-            FusedRead(
-                offset=cur_offset,
-                length=cur_end - cur_offset,
-                members=tuple(cur_members),
-                waste=cur_waste,
-            )
-        )
+        fused.append(FusedRead(offset=cur_offset, length=cur_end - cur_offset, members=tuple(cur_members)))
 
     for r, orig_idx in indexed:
         if r.length == 0:
@@ -141,31 +129,21 @@ def coalesce_ranges(
             fused.append(FusedRead(offset=r.offset, length=0, members=((orig_idx, 0, 0),)))
             cur_open = False
             cur_members = []
-            cur_waste = 0
             continue
 
         if r.length > max_fused_bytes:
             # Single request already larger than the cap — emit as its
             # own window after flushing whatever's open.
             _emit()
-            fused.append(
-                FusedRead(
-                    offset=r.offset,
-                    length=r.length,
-                    members=((orig_idx, 0, r.length),),
-                    waste=0,
-                )
-            )
+            fused.append(FusedRead(offset=r.offset, length=r.length, members=((orig_idx, 0, r.length),)))
             cur_open = False
             cur_members = []
-            cur_waste = 0
             continue
 
         if not cur_open:
             cur_offset = r.offset
             cur_end = r.end
             cur_members = [(orig_idx, 0, r.length)]
-            cur_waste = 0
             cur_open = True
             continue
 
@@ -181,48 +159,13 @@ def coalesce_ranges(
 
         if ok_gap and ok_cap:
             cur_members.append((orig_idx, r.offset - cur_offset, r.length))
-            if gap > 0:
-                cur_waste += gap
             cur_end = candidate_end
         else:
             _emit()
             cur_offset = r.offset
             cur_end = r.end
             cur_members = [(orig_idx, 0, r.length)]
-            cur_waste = 0
             cur_open = True
 
     _emit()
     return fused
-
-
-def slice_into_outputs(
-    buffers: Sequence[memoryview | bytes | bytearray],
-    fused: Sequence[FusedRead],
-    n_originals: int,
-) -> list[memoryview | bytes | bytearray | None]:
-    """Slice fused-read buffers back into per-original-request views.
-
-    Each entry of ``buffers`` corresponds to ``fused[i]`` and holds the
-    bytes read for that fused window.  Returns a list of length
-    ``n_originals`` where index ``j`` is a view (or sub-buffer) covering
-    the bytes originally requested as ``ranges[j]``.
-
-    Slices are returned as the same type as the input buffer (memoryview
-    if input is memoryview / bytes / bytearray).  Caller is responsible
-    for handing the views onward before the parent buffer is freed.
-    """
-    if len(buffers) != len(fused):
-        raise ValueError(f"buffers length {len(buffers)} != fused length {len(fused)}")
-    out: list[memoryview | bytes | bytearray | None] = [None] * n_originals
-    for buf, win in zip(buffers, fused, strict=True):
-        if isinstance(buf, (bytes, bytearray)):
-            mv = memoryview(buf)
-        else:
-            mv = buf
-        for orig_idx, intra_off, length in win.members:
-            if length == 0:
-                out[orig_idx] = mv[:0] if mv is not None else None
-            else:
-                out[orig_idx] = mv[intra_off : intra_off + length]
-    return out

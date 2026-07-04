@@ -13,7 +13,7 @@ benchable on its own.
 
 from typing import Any
 
-from czarr.lowlevel.coalesce import ByteRange, FusedRead, coalesce_ranges, slice_into_outputs
+from czarr.lowlevel.coalesce import ByteRange, FusedRead, coalesce_ranges
 from czarr.lowlevel.plan import DecodePlan, ReadRequest, ShardSpec, normalize_selection, open_plan, plan_from_metadata
 
 __all__ = [
@@ -29,7 +29,6 @@ __all__ = [
     "plan_from_metadata",
     "read",
     "read_array",
-    "slice_into_outputs",
 ]
 
 # GPU-touching stages load on first use (planning stays cupy-free).
