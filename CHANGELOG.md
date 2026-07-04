@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codec, pipeline, storage, allocator coverage ([8a6d8a3](https://github.com/srivarra/czarr/commit/8a6d8a32746a69e19a81bf524d9149736782d4e6))
 
 ### 🏗️ CI & build
+- **changelog:** Group by conventional commits; enforce with commitizen ([a372b23](https://github.com/srivarra/czarr/commit/a372b23c80e59ad14a60417a41448d018b59bb78))
 - Derive the version from git tags (hatch-vcs) ([e1e16ac](https://github.com/srivarra/czarr/commit/e1e16acb18ae03cc9320bbd3d9710c39fbf8b22a))
 - **release:** Skip-existing on TestPyPI for idempotent re-runs ([b9aa4c0](https://github.com/srivarra/czarr/commit/b9aa4c0e6ee21323c31650e27577330abad55a14))
 - Suppress superfluous-actions for the auto-update PR action ([ee0abdc](https://github.com/srivarra/czarr/commit/ee0abdc4785e5617b07f09178b0d309206474753))
@@ -108,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove scverse template scaffold ([da49c11](https://github.com/srivarra/czarr/commit/da49c11aec82ac9406a151d73031968771ea3907))
 
 ### 🌀 Miscellaneous
+- Merge pull request #11 from srivarra/changelog-perms ([26e4f9f](https://github.com/srivarra/czarr/commit/26e4f9fbe6ccbb3da838a672ba70ea69d03548ec))
 - Merge pull request #10 from srivarra/dynamic-version ([c368c4a](https://github.com/srivarra/czarr/commit/c368c4a34772e87e0bcf47b5056257eb17a603d2))
 - Merge pull request #8 from srivarra/docs-features ([5792791](https://github.com/srivarra/czarr/commit/5792791f4f35e775da553a6f14549eeade643e07))
 - Merge branch 'main' into docs-features ([e56110c](https://github.com/srivarra/czarr/commit/e56110c4d1f9772731a827b0bd62d8c88329c271))
