@@ -913,6 +913,7 @@ cu12 = [
     { name = "nsight-python", extra = ["cu12"], marker = "extra == 'extra-5-czarr-cu12'" },
     { name = "nvidia-cuda-nvrtc-cu12" },
     { name = "nvidia-cuda-runtime-cu12" },
+    { name = "nvidia-cufile-cu12" },
     { name = "nvidia-nvcomp-cu12" },
     { name = "rmm-cu12" },
 ]
@@ -921,8 +922,9 @@ cu13 = [
     { name = "cuda-python", version = "13.3.1", source = { registry = "https://pypi.org/simple" } },
     { name = "cupy-cuda13x" },
     { name = "nsight-python", extra = ["cu13"], marker = "extra == 'extra-5-czarr-cu13'" },
-    { name = "nvidia-cuda-nvrtc-cu13" },
-    { name = "nvidia-cuda-runtime-cu13" },
+    { name = "nvidia-cuda-nvrtc" },
+    { name = "nvidia-cuda-runtime" },
+    { name = "nvidia-cufile" },
     { name = "nvidia-nvcomp-cu13" },
     { name = "rmm-cu13" },
 ]
@@ -958,10 +960,12 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cu13'", specifier = ">=13.6" },
     { name = "nsight-python", extras = ["cu12"], marker = "extra == 'cu12'", specifier = ">=0.9.6" },
     { name = "nsight-python", extras = ["cu13"], marker = "extra == 'cu13'", specifier = ">=0.9.6" },
+    { name = "nvidia-cuda-nvrtc", marker = "extra == 'cu13'", specifier = ">=13" },
     { name = "nvidia-cuda-nvrtc-cu12", marker = "extra == 'cu12'", specifier = ">=12.9.86" },
-    { name = "nvidia-cuda-nvrtc-cu13", marker = "extra == 'cu13'" },
+    { name = "nvidia-cuda-runtime", marker = "extra == 'cu13'", specifier = ">=13" },
     { name = "nvidia-cuda-runtime-cu12", marker = "extra == 'cu12'", specifier = ">=12.9.79" },
-    { name = "nvidia-cuda-runtime-cu13", marker = "extra == 'cu13'" },
+    { name = "nvidia-cufile", marker = "extra == 'cu13'", specifier = ">=1.15" },
+    { name = "nvidia-cufile-cu12", marker = "extra == 'cu12'", specifier = ">=1.13" },
     { name = "nvidia-nvcomp-cu12", marker = "extra == 'cu12'", specifier = ">=5.1.0.21" },
     { name = "nvidia-nvcomp-cu13", marker = "extra == 'cu13'", specifier = ">=5.1.0.21" },
     { name = "rmm-cu12", marker = "extra == 'cu12'", specifier = ">=26", index = "https://pypi.nvidia.com/" },
@@ -2337,10 +2341,14 @@ wheels = [
 ]
 
 [[package]]
-name = "nvidia-cuda-nvrtc-cu13"
-version = "0.0.1"
+name = "nvidia-cuda-runtime"
+version = "13.3.29"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d8/f8/c9c6560daf79d80703459485129cf12dd600dbb5ecdca923b78374299013/nvidia_cuda_nvrtc_cu13-0.0.1.tar.gz", hash = "sha256:8907dbe6783714506c831e47648789a7dc8895395b58643b85e97512c59b15af", size = 1373, upload-time = "2025-10-31T20:37:18.617Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5f/e5/c1a221c8e6fecd071b80ea44c20fc253ae24f56e15e3f77cfbc3fb76e724/nvidia_cuda_runtime-13.3.29-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:73291e19c9dd919c140c91bda2f80b0eca487da5ee30a086ef7bc4918ecb90ea", size = 2356574, upload-time = "2026-05-26T16:29:56.333Z" },
+    { url = "https://files.pythonhosted.org/packages/97/be/5699b6e642b372f7d24c59c2f41383e2696825e20bab85f7399c7c6a56f7/nvidia_cuda_runtime-13.3.29-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e04420616e72f563167a7733272992d7e6df6dc5cb54b2f94f9f1520ea9e30c1", size = 2339786, upload-time = "2026-05-26T16:30:21.584Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/27/b53a5e0397842a5c11f0e1a39d4e5b2f22638a4126e83b3c4e196f62c969/nvidia_cuda_runtime-13.3.29-py3-none-win_amd64.whl", hash = "sha256:0667ec61c3d897388efa305ed4f7609ace88849a753ba9c6311d06dca55fff4f", size = 2630354, upload-time = "2026-05-26T17:00:05.389Z" },
+]
 
 [[package]]
 name = "nvidia-cuda-runtime-cu12"
@@ -2351,12 +2359,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/bc/46/a92db19b8309581092a3add7e6fceb4c301a3fd233969856a8cbf042cd3c/nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:25bba2dfb01d48a9b59ca474a1ac43c6ebf7011f1b0b8cc44f54eb6ac48a96c3", size = 3493179, upload-time = "2025-06-05T20:00:53.735Z" },
     { url = "https://files.pythonhosted.org/packages/59/df/e7c3a360be4f7b93cee39271b792669baeb3846c58a4df6dfcf187a7ffab/nvidia_cuda_runtime_cu12-12.9.79-py3-none-win_amd64.whl", hash = "sha256:8e018af8fa02363876860388bd10ccb89eb9ab8fb0aa749aaf58430a9f7c4891", size = 3591604, upload-time = "2025-06-05T20:11:17.036Z" },
 ]
-
-[[package]]
-name = "nvidia-cuda-runtime-cu13"
-version = "0.0.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/83/52/6cd70adb2e690815e5e91d5c81943652ae33020f7f405482a095fb3339ae/nvidia_cuda_runtime_cu13-0.0.1.tar.gz", hash = "sha256:65a96efb265c833d0f68ecd834b2c9a74ddc91182ad13dbfce8a76cdfe438442", size = 1379, upload-time = "2025-10-31T20:40:49.389Z" }
 
 [[package]]
 name = "nvidia-cudla"
