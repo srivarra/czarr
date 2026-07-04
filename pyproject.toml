@@ -4,7 +4,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "czarr"
-version = "0.0.1"
+version = "0.1.0"
 description = "Decompress / Compress Zarr on the GPU"
 readme = "README.md"
 license = { file = "LICENSE" }
