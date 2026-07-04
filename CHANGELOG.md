@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GPU codecs, batched pipeline, cuFile store for Zarr 3 ([77d4ca5](https://github.com/srivarra/czarr/commit/77d4ca5294164aad228de4503be4a948e17950f2))
 
 ### 🐛 Fixes
+- **tests:** Print the pytest summary before the hard exit ([2cdfd05](https://github.com/srivarra/czarr/commit/2cdfd05331ca6d16fe2c0a4b624a37c23cc928c0))
+- **cufile:** CZARR_CUFILE=0 kill-switch for hosts where driver_open hangs ([bb32b35](https://github.com/srivarra/czarr/commit/bb32b359de564884858fb971b5230a6a026cb5db))
+- **ci:** Pytest 9 dropped --faulthandler-timeout; use -o ini options ([ac8bb87](https://github.com/srivarra/czarr/commit/ac8bb8779c28f54ca6d57661058ad31e83269633))
+- **ci:** Probe via the venv python; stream pytest output unbuffered ([0372e9f](https://github.com/srivarra/czarr/commit/0372e9fe7cea2d3a52dcbff37c41b14eb7fae061))
+- **ci:** Use the generic setuptools-scm pretend-version variable ([57900eb](https://github.com/srivarra/czarr/commit/57900eb57ff59ae31746c27cc070fa3504d37c18))
+- **ci:** Grant contents:read to the GPU test job ([c5bd19e](https://github.com/srivarra/czarr/commit/c5bd19e000647402d5b3caf8c751f8c5a74c51f6))
 - **deps:** Use real CUDA 13 wheel names and ship cufile in the extras ([bb9305c](https://github.com/srivarra/czarr/commit/bb9305cdce5356f489ad2f1e64ece0f57b9dfeaa))
 - **ci:** Grant changelog job pull-requests read ([1a9ce09](https://github.com/srivarra/czarr/commit/1a9ce0907c029a062d1377f079a9e755c18f6542))
 - **ci:** Environment-independent ty results; skip SARIF on private repo ([6d9d806](https://github.com/srivarra/czarr/commit/6d9d8066721e40a6bd8e23fb2eb9611732ef0233))
@@ -92,6 +98,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codec, pipeline, storage, allocator coverage ([8a6d8a3](https://github.com/srivarra/czarr/commit/8a6d8a32746a69e19a81bf524d9149736782d4e6))
 
 ### 🏗️ CI & build
+- Green the Modal lanes — tomllib shim + hard exit at teardown ([6319cc1](https://github.com/srivarra/czarr/commit/6319cc1fd5101e2150576a148cc23c430754f4c8))
+- Build Modal images with Image.uv_sync; disable cuFile in lanes ([282e45b](https://github.com/srivarra/czarr/commit/282e45bb4bfb6a6bc91efade5f391bc6bfc3c1de))
+- Run Modal in the default environment ([150eb66](https://github.com/srivarra/czarr/commit/150eb669c58cdf9756c23bfb899d92022ff90d6a))
+- Label-gated Modal GPU test matrix (7 SMs x cu12/cu13) ([36b85d5](https://github.com/srivarra/czarr/commit/36b85d54e7d8955ea330ba39831cae2bb1f62d17))
 - Run the autolabeler sub-action on PR events ([03e5aad](https://github.com/srivarra/czarr/commit/03e5aad81e53ed9e06b9ccdd7011205a123f4e26))
 - **release:** Derive labels from conventional PR titles ([a933277](https://github.com/srivarra/czarr/commit/a933277c94b00015ec81d1a7a428d2d8e444c9fb))
 - **changelog:** Group by conventional commits; enforce with commitizen ([a372b23](https://github.com/srivarra/czarr/commit/a372b23c80e59ad14a60417a41448d018b59bb78))
