@@ -3,7 +3,6 @@ icon: lucide/layers
 description: Read zarr arrays with czarr.core.Array and czarr.lowlevel — per-call options, async, no global state.
 tags:
   - API
-  - GPU
 ---
 
 # Explicit reads

@@ -1,0 +1,70 @@
+/* Pierre theme (github.com/pierrecomputer/pierre, packages/theme) mapped
+   onto zensical's CSS variables.  UI colors come from the editor/sideBar
+   tokens of pierre-light / pierre-dark; code-highlight colors come from
+   the corresponding tokenColors scopes. */
+
+[data-md-color-scheme="default"] {
+  /* surfaces + text */
+  --md-default-bg-color: #ffffff;
+  --md-default-fg-color: #0a0a0a;
+  --md-default-fg-color--light: #525252;
+  --md-default-fg-color--lighter: #737373;
+  --md-default-fg-color--lightest: #e5e5e5;
+
+  /* Pierre blue */
+  --md-primary-fg-color: #009fff;
+  --md-primary-fg-color--light: #dfebff;
+  --md-primary-fg-color--dark: #0077cc;
+  --md-accent-fg-color: #0077cc;
+  --md-typeset-a-color: #009fff;
+
+  /* code blocks: pierre-light */
+  --md-code-bg-color: #f5f5f5;
+  --md-code-fg-color: #0a0a0a;
+  --md-code-hl-color: #009fff2e;
+  --md-code-hl-comment-color: #737373;
+  --md-code-hl-string-color: #199f43;
+  --md-code-hl-number-color: #1ca1c7;
+  --md-code-hl-constant-color: #d5a910;
+  --md-code-hl-keyword-color: #d32a61;
+  --md-code-hl-function-color: #693acf;
+  --md-code-hl-variable-color: #d47628;
+  --md-code-hl-special-color: #d32a61;
+  --md-code-hl-name-color: var(--md-code-fg-color);
+  --md-code-hl-operator-color: var(--md-default-fg-color--light);
+  --md-code-hl-punctuation-color: var(--md-default-fg-color--light);
+  --md-code-hl-generic-color: var(--md-default-fg-color--light);
+}
+
+[data-md-color-scheme="slate"] {
+  /* surfaces + text */
+  --md-default-bg-color: #0a0a0a;
+  --md-default-fg-color: #fafafa;
+  --md-default-fg-color--light: #a3a3a3;
+  --md-default-fg-color--lighter: #737373;
+  --md-default-fg-color--lightest: #262626;
+
+  /* Pierre blue */
+  --md-primary-fg-color: #009fff;
+  --md-primary-fg-color--light: #19283c;
+  --md-primary-fg-color--dark: #0077cc;
+  --md-accent-fg-color: #66c5ff;
+  --md-typeset-a-color: #009fff;
+
+  /* code blocks: pierre-dark */
+  --md-code-bg-color: #171717;
+  --md-code-fg-color: #fafafa;
+  --md-code-hl-color: #009fff4d;
+  --md-code-hl-comment-color: #737373;
+  --md-code-hl-string-color: #5ecc71;
+  --md-code-hl-number-color: #68cdf2;
+  --md-code-hl-constant-color: #ffd452;
+  --md-code-hl-keyword-color: #ff678d;
+  --md-code-hl-function-color: #9d6afb;
+  --md-code-hl-variable-color: #ffa359;
+  --md-code-hl-special-color: #ff678d;
+  --md-code-hl-name-color: var(--md-code-fg-color);
+  --md-code-hl-operator-color: var(--md-default-fg-color--light);
+  --md-code-hl-punctuation-color: var(--md-default-fg-color--light);
+  --md-code-hl-generic-color: var(--md-default-fg-color--light);
+}

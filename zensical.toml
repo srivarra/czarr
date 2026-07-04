@@ -8,6 +8,7 @@ site_author = "Sricharan Reddy Varra"
 site_url = "https://czarr.readthedocs.io/"
 repo_url = "https://github.com/srivarra/czarr"
 copyright = "Copyright &copy; 2026 Sricharan Reddy Varra"
+extra_css = [ "stylesheets/pierre.css" ]
 
 nav = [
   { "Home" = "index.md" },
@@ -53,16 +54,16 @@ features = [
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
-primary = "green"
-accent = "teal"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
-primary = "green"
-accent = "teal"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"
 
@@ -70,7 +71,6 @@ toggle.name = "Switch to light mode"
 [project.plugins.tags]
 
 [project.extra.tags]
-GPU = "gpu"
 GDS = "gds"
 Codecs = "codec"
 API = "api"
@@ -78,7 +78,6 @@ Performance = "perf"
 
 [project.theme.icon.tag]
 default = "lucide/hash"
-gpu = "lucide/zap"
 gds = "lucide/hard-drive"
 codec = "lucide/package"
 api = "lucide/braces"

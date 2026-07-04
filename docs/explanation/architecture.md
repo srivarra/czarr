@@ -2,7 +2,6 @@
 icon: lucide/compass
 description: Why czarr has two read APIs, how a read flows through the stages, and which designs were measured out.
 tags:
-  - GPU
   - Performance
 ---
 

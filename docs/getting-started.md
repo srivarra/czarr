@@ -1,8 +1,6 @@
 ---
 icon: lucide/rocket
 description: Create, write, and read a GPU-compressed Zarr array through both czarr tiers.
-tags:
-  - GPU
 ---
 
 # Getting started

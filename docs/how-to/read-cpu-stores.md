@@ -3,7 +3,6 @@ icon: lucide/refresh-cw
 description: Decode existing CPU-written zarr stores on the GPU without migration.
 tags:
   - Codecs
-  - GPU
 ---
 
 # GPU-decode existing CPU stores
