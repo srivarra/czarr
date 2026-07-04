@@ -19,8 +19,11 @@ if not Path("/proc/driver/nvidia-fs").exists():
 # pytest's default tmp_path is on /tmp (tmpfs on many hosts), which
 # cuFile cannot use even in compat mode (udev attrs are unavailable for
 # tmpfs).  Anchor cuFile-using tests in a dedicated real-FS dir outside
-# the repo tree, swept of stale leftovers once per session.
-_GPUSTORE_TMP_PARENT = Path(f"/hpc/mydata/{os.environ.get('USER', 'nobody')}/.czarr-test-tmp")
+# the repo tree, swept of stale leftovers once per session.  Container CI
+# (Modal) points CZARR_TEST_TMP at container-local disk instead.
+_GPUSTORE_TMP_PARENT = Path(
+    os.environ.get("CZARR_TEST_TMP") or f"/hpc/mydata/{os.environ.get('USER', 'nobody')}/.czarr-test-tmp"
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
