@@ -5,11 +5,12 @@ Usage (GPU type and CUDA lane are both parametrized)::
     modal run ci/modal_ci.py --gpu T4 --extra cu12
     modal run ci/modal_ci.py --gpu B200 --extra cu13
 
-Dependencies are baked into one image per CUDA extra from uv.lock (cached
-until the lock changes); the working tree is mounted at run time, so
-iterating on source costs an upload, not an image rebuild.  cuFile runs in
-compat mode inside containers (no nvidia_fs) — same semantics as the A40
-dev baseline.  See issue #14 for the SM/CUDA matrix this feeds.
+Dependencies are baked into one image per CUDA extra straight from uv.lock
+via Image.uv_sync (cached until the lock changes); the working tree is
+mounted at run time, so iterating on source costs an upload, not an image
+rebuild.  cuFile runs in compat mode inside containers (no nvidia_fs) —
+same semantics as the A40 dev baseline.  See issue #14 for the SM/CUDA
+matrix this feeds.
 """
 
 from pathlib import Path
@@ -18,7 +19,6 @@ import modal
 
 REPO_ROOT = Path(__file__).parent.parent
 REMOTE_ROOT = "/root/czarr"
-VENV = "/opt/venv"
 
 GPUS = ("T4", "L4", "A10", "A100-40GB", "H100!", "B200", "RTX-PRO-6000")
 
@@ -46,41 +46,17 @@ def _image(extra: str) -> modal.Image:
     """Debian slim + the locked czarr environment for one CUDA extra.
 
     No CUDA base image: the extras are all-wheels (cupy, nvrtc, runtime,
-    nvcomp, cufile) and the driver comes from Modal's host.  hatch-vcs has
-    no .git at build time, so deps sync with --no-install-project and czarr
-    itself installs at run time under a pretend version.
+    nvcomp, cufile) and the driver comes from Modal's host.  uv_sync skips
+    the project itself (hatch-vcs has no .git at build time); czarr installs
+    at run time under a pretend version.  hatchling/hatch-vcs are pre-baked
+    so that install can skip build isolation, and uv provides the installer.
     """
     return (
         modal.Image.debian_slim(python_version="3.13")
-        .pip_install("uv")
-        .add_local_file(REPO_ROOT / "pyproject.toml", f"{REMOTE_ROOT}/pyproject.toml", copy=True)
-        .add_local_file(REPO_ROOT / "uv.lock", f"{REMOTE_ROOT}/uv.lock", copy=True)
-        .run_commands(
-            f"cd {REMOTE_ROOT} && UV_PROJECT_ENVIRONMENT={VENV} UV_PYTHON_DOWNLOADS=never "
-            f"uv sync --frozen --no-install-project --no-default-groups --group test --extra {extra}",
-            # hatchling in the venv lets the runtime czarr install skip
-            # build isolation (no network fetch per lane).
-            f"uv pip install --python {VENV}/bin/python hatchling hatch-vcs",
-        )
+        .uv_sync(str(REPO_ROOT), groups=["test"], extras=[extra], extra_options="--no-default-groups")
+        .uv_pip_install("hatchling", "hatch-vcs", "uv")
         .add_local_dir(REPO_ROOT, remote_path=REMOTE_ROOT, ignore=_MOUNT_IGNORE)
     )
-
-
-# Runs under the venv python (the CUDA packages are not importable from the
-# container's system python, which executes this module).
-_PROBE_SNIPPET = """
-try:
-    from cuda.bindings import driver
-    driver.cuInit(0)
-    attr = getattr(driver.CUdevice_attribute, "CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_ALGORITHM_MASK", None)
-    if attr is None:
-        print("decompression engine: attribute not in these bindings")
-    else:
-        _, mask = driver.cuDeviceGetAttribute(attr, 0)
-        print(f"decompression engine mask: {mask} ({'present' if mask else 'absent'})")
-except Exception as exc:
-    print(f"probe skipped: {exc}")
-"""
 
 
 def _probe() -> None:
@@ -91,19 +67,42 @@ def _probe() -> None:
         ["nvidia-smi", "--query-gpu=name,driver_version,compute_cap", "--format=csv"],
         check=False,
     )
-    subprocess.run([f"{VENV}/bin/python", "-c", _PROBE_SNIPPET], check=False)
+    try:
+        from cuda.bindings import driver
+
+        driver.cuInit(0)
+        attr = getattr(driver.CUdevice_attribute, "CU_DEVICE_ATTRIBUTE_MEM_DECOMPRESS_ALGORITHM_MASK", None)
+        if attr is None:
+            print("decompression engine: attribute not in these bindings")
+        else:
+            _, mask = driver.cuDeviceGetAttribute(attr, 0)
+            print(f"decompression engine mask: {mask} ({'present' if mask else 'absent'})")
+    except Exception as exc:  # noqa: BLE001 — diagnostics must not fail the lane
+        print(f"probe skipped: {exc}")
 
 
 def _run_suite() -> None:
-    """Install czarr into the baked venv and run pytest."""
+    """Install czarr into the lane's environment and run pytest."""
     import os
     import subprocess
+    import sys
 
     # hatch-vcs calls setuptools-scm without a dist name, so only the
     # generic (unsuffixed) pretend-version variable is honoured.
     env = os.environ | {"SETUPTOOLS_SCM_PRETEND_VERSION": "0.0.0"}
     subprocess.run(
-        ["uv", "pip", "install", "--python", f"{VENV}/bin/python", "--no-deps", "--no-build-isolation", "."],
+        [
+            sys.executable,
+            "-m",
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            sys.executable,
+            "--no-deps",
+            "--no-build-isolation",
+            ".",
+        ],
         check=True,
         cwd=REMOTE_ROOT,
         env=env,
@@ -117,7 +116,7 @@ def _run_suite() -> None:
     # (pytest 9 dropped the --faulthandler-timeout flag; ini options only).
     subprocess.run(
         [
-            f"{VENV}/bin/python",
+            sys.executable,
             "-u",
             "-m",
             "pytest",
@@ -130,7 +129,16 @@ def _run_suite() -> None:
         ],
         check=True,
         cwd=REMOTE_ROOT,
-        env=env | {"CZARR_TEST_TMP": test_tmp, "PYTHONUNBUFFERED": "1"},
+        env=env
+        | {
+            "CZARR_TEST_TMP": test_tmp,
+            "PYTHONUNBUFFERED": "1",
+            # cuFileDriverOpen never returns under Modal's gVisor sandbox
+            # (hangs in C, no error).  Disable cuFile: gated tests skip and
+            # reads take the host-I/O + H2D fallback.  GDS coverage stays
+            # on Bruno.
+            "CZARR_CUFILE": "0",
+        },
     )
 
 
