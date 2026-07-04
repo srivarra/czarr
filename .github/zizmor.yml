@@ -1,0 +1,38 @@
+rules:
+  # Require every action to be pinned to a full commit SHA.
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin
+  # Only allow actions from these trusted owners; add new owners deliberately.
+  forbidden-uses:
+    config:
+      allow:
+        - actions/*
+        - astral-sh/*
+        - codecov/*
+        - j178/*
+        - orhun/*
+        - peter-evans/*
+        - pypa/*
+        - re-actors/*
+        - release-drafter/*
+        - sigstore/*
+        - zizmorcore/*
+  # matrix.env.* comes from the in-workflow hatch matrix, not external input.
+  template-injection:
+    ignore:
+      - test.yaml
+  # changelog.yaml intentionally persists credentials to push the regenerated
+  # changelog back to main.
+  artipacked:
+    ignore:
+      - changelog.yaml
+  # peter-evans/create-pull-request is a deliberate choice over hand-rolled
+  # `gh pr create` scripting in the auto-update workflow.
+  superfluous-actions:
+    ignore:
+      - prek-autoupdate.yaml
+  # Requiring an explicit name on every job/step is stylistic noise.
+  anonymous-definition:
+    disable: true

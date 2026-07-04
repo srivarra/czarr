@@ -51,6 +51,8 @@ def _lib() -> ctypes.CDLL:
     from pathlib import Path
 
     mod = importlib.import_module("nvidia.libnvcomp")  # namespace pkg — import_module binds it
+    if mod.__file__ is None:  # pragma: no cover — real package, always file-backed
+        raise RuntimeError("nvidia.libnvcomp has no __file__; cannot locate libnvcomp.so")
     so = str(Path(mod.__file__).parent / "lib64" / "libnvcomp.so.5")
     lib = ctypes.CDLL(so)
     lib.nvcompBatchedZstdDecompressGetTempSizeAsync.restype = ctypes.c_int

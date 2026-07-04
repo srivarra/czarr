@@ -116,18 +116,23 @@ scripts.serve = "zensical serve {args}"
 scripts.open = "python -m webbrowser -t site/index.html"
 scripts.clean = "git clean -fdX -- site"
 
-# Test the lowest and highest supported Python versions with normal deps
+# Test the lowest and highest supported Python versions with normal deps.
+# 3.13 is the ceiling here (not 3.14) because the pinned CUDA wheels
+# (cupy-cuda12x) do not publish cp314 builds yet.
 [[tool.hatch.envs.hatch-test.matrix]]
 deps = [ "stable" ]
-python = [ "3.12", "3.14" ]
+python = [ "3.12", "3.13" ]
 
 # Test the newest supported Python version also with pre-release deps
 [[tool.hatch.envs.hatch-test.matrix]]
 deps = [ "pre" ]
-python = [ "3.14" ]
+python = [ "3.13" ]
 
 [tool.hatch.envs.hatch-test]
 dependency-groups = [ "dev", "test" ]
+# cu12 so `import czarr` resolves on CI runners; imports need no GPU, and
+# the CI workflow selects the host-only test subset.
+features = [ "cu12" ]
 
 [tool.hatch.envs.hatch-test.overrides]
 # If the matrix variable `deps` is set to "pre",

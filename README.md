@@ -1,5 +1,42 @@
 # czarr
 
+<div align="center">
+
+|             |                                                                                                                                                                                            |
+| :---------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| **Status**  | [![Build][badge-build]][link-build] [![Tests][badge-test]][link-test] [![Documentation][badge-docs]][link-docs] [![codecov][badge-codecov]][link-codecov] [![prek][badge-prek]][link-prek] [![zizmor][badge-zizmor]][link-zizmor] |
+|  **Meta**   | [![Hatch project][badge-hatch]][link-hatch] [![Ruff][badge-ruff]][link-ruff] [![ty][badge-ty]][link-ty] [![uv][badge-uv]][link-uv] [![License][badge-license]][link-license]               |
+| **Package** | [![PyPI][badge-pypi]][link-pypi] [![PyPI][badge-python-versions]][link-pypi]                                                                                                               |
+|             |                                                                                                                                                                                            |
+
+</div>
+
+[badge-build]: https://github.com/srivarra/czarr/actions/workflows/build.yaml/badge.svg
+[badge-test]: https://github.com/srivarra/czarr/actions/workflows/test.yaml/badge.svg
+[badge-docs]: https://img.shields.io/readthedocs/czarr?logo=readthedocs
+[badge-codecov]: https://codecov.io/gh/srivarra/czarr/graph/badge.svg
+[badge-prek]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/j178/prek/master/docs/assets/badge-v0.json
+[badge-zizmor]: https://img.shields.io/badge/%F0%9F%8C%88-zizmor-white?labelColor=white
+[badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
+[badge-ruff]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
+[badge-ty]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json
+[badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
+[badge-license]: https://img.shields.io/badge/License-MIT-yellow.svg
+[badge-pypi]: https://img.shields.io/pypi/v/czarr.svg?logo=pypi&label=PyPI&logoColor=gold
+[badge-python-versions]: https://img.shields.io/pypi/pyversions/czarr.svg?logo=python&label=Python&logoColor=gold
+[link-build]: https://github.com/srivarra/czarr/actions/workflows/build.yaml
+[link-test]: https://github.com/srivarra/czarr/actions/workflows/test.yaml
+[link-docs]: https://czarr.readthedocs.io/
+[link-codecov]: https://codecov.io/gh/srivarra/czarr
+[link-prek]: https://github.com/j178/prek
+[link-zizmor]: https://github.com/zizmorcore/zizmor
+[link-hatch]: https://github.com/pypa/hatch
+[link-ruff]: https://github.com/astral-sh/ruff
+[link-ty]: https://github.com/astral-sh/ty
+[link-uv]: https://github.com/astral-sh/uv
+[link-license]: https://opensource.org/licenses/MIT
+[link-pypi]: https://pypi.org/project/czarr/
+
 czarr reads and writes Zarr v3 arrays on NVIDIA GPUs. Compression runs through nvCOMP, file I/O runs through cuFile (GPUDirect Storage where the system supports it), and reads return `cupy.ndarray`.
 
 Documentation: <https://czarr.readthedocs.io/>
