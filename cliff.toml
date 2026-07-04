@@ -67,6 +67,7 @@ commit_parsers = [
   { message = "^[a-z]+(\\(.*\\))?!:", group = "<!-- 0 -->💥 Breaking changes" },
   { body = ".*BREAKING CHANGE.*", group = "<!-- 0 -->💥 Breaking changes" },
   { message = "^chore: update changelog", skip = true },
+  { message = "^Merge ", skip = true },
   { message = "^feat", group = "<!-- 1 -->🚀 Features" },
   { message = "^fix", group = "<!-- 2 -->🐛 Fixes" },
   { message = "^perf", group = "<!-- 3 -->⚡ Performance" },

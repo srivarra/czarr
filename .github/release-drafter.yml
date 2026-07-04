@@ -1,19 +1,37 @@
+# Labels are derived from conventional PR titles by the autolabeler below —
+# never hand-applied.  Categories mirror cliff.toml's changelog groups so
+# release notes and CHANGELOG.md tell the same story at different zoom
+# levels (PRs here, commits there).
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
+
 categories:
+  - title: "💥 Breaking changes"
+    label: "breaking"
   - title: "🚀 Features"
-    labels:
-      - "feature"
-      - "enhancement"
-  - title: "🐛 Bug Fixes"
-    labels:
-      - "fix"
-      - "bugfix"
-      - "bug"
+    label: "feature"
+  - title: "🐛 Fixes"
+    label: "fix"
+  - title: "⚡ Performance"
+    label: "performance"
+  - title: "🔨 Refactor"
+    label: "refactor"
+  - title: "📝 Documentation"
+    label: "documentation"
+  - title: "🧪 Testing"
+    label: "testing"
+  - title: "🏗️ CI & build"
+    label: "ci"
   - title: "🧰 Maintenance"
     label: "chore"
+
 change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 change-title-escapes: '\<*_&' # You can add # and @ to disable mentions, and add ` to disable code blocks.
+
+# 0.x policy: breaking changes do NOT bump major — anything can break
+# pre-1.0 and we move fast.  feat bumps minor, everything else patch.
+# The major/minor/patch labels remain as manual overrides (e.g. the
+# eventual, deliberate 1.0).
 version-resolver:
   major:
     labels:
@@ -21,10 +39,41 @@ version-resolver:
   minor:
     labels:
       - "minor"
+      - "feature"
   patch:
     labels:
       - "patch"
   default: patch
+
+autolabeler:
+  - label: "breaking"
+    title:
+      - '/^[a-z]+(\(.+\))?!:/'
+  - label: "feature"
+    title:
+      - "/^feat/"
+  - label: "fix"
+    title:
+      - "/^fix/"
+  - label: "performance"
+    title:
+      - "/^perf/"
+  - label: "refactor"
+    title:
+      - "/^refactor/"
+  - label: "documentation"
+    title:
+      - "/^docs/"
+  - label: "testing"
+    title:
+      - "/^test/"
+  - label: "ci"
+    title:
+      - "/^(ci|build)/"
+  - label: "chore"
+    title:
+      - "/^(chore|style)/"
+
 template: |
   ## Changes
 
