@@ -108,6 +108,10 @@ Match the chunk to the access pattern so each read decodes only the chunks it to
 - Real GPUDirect Storage requires the `nvidia_fs` kernel module; without it cuFile stages through a pinned host bounce. cuFile cannot read tmpfs.
 - `cupy` is a hard dependency; zarr's GPU buffer prototype is hard-coded to `cupy.ndarray`.
 
+## An experiment in AI-assisted development
+
+czarr is an experiment in AI-assisted development ("vibe coding"): most implementation was written by Claude Code, with a human directing design, reviewing changes, and interpreting benchmarks. The bet under test is that correctness can rest on hard gates rather than line-by-line authorship: a test suite CI runs on seven GPU architectures across CUDA 12 and 13, and benchmarks against real hardware. Read the code with the skepticism you would apply to any unfamiliar codebase.
+
 ## License
 
 MIT.
