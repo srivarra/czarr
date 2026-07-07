@@ -110,7 +110,8 @@ Match the chunk to the access pattern so each read decodes only the chunks it to
 
 ## An experiment in AI-assisted development
 
-czarr is an experiment in AI-assisted development ("vibe coding"): most implementation was written by Claude Code, with a human directing design, reviewing changes, and interpreting benchmarks. The bet under test is that correctness can rest on hard gates rather than line-by-line authorship: a test suite CI runs on seven GPU architectures across CUDA 12 and 13, and benchmarks against real hardware. Read the code with the skepticism you would apply to any unfamiliar codebase.
+As you can probably tell, most of this has been generated with AI tooling, this is just an experiment to see if this even works, and it has helped me 
+resolve the issue of i/o bottlenecks in my own work.
 
 ## License
 
