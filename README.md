@@ -110,7 +110,7 @@ Match the chunk to the access pattern so each read decodes only the chunks it to
 
 ## An experiment in AI-assisted development
 
-As you can probably tell, most of this has been generated with AI tooling, this is just an experiment to see if this even works, and it has helped me 
+As you can probably tell, most of this has been generated with AI tooling, this is just an experiment to see if this even works, and it has helped me
 resolve the issue of i/o bottlenecks in my own work.
 
 ## License
