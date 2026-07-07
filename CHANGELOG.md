@@ -81,6 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **storage:** Use Buffer.create_zero_length() for empty key ([fe1f7a3](https://github.com/srivarra/czarr/commit/fe1f7a34f98da7edb9ca57b394047cb75e78f9e1))
 
 ### 📝 Documentation
+- Update ai disclosure ([530fc7d](https://github.com/srivarra/czarr/commit/530fc7d4f4faa58f2b78bdbf511a611a05329e45))
+- Disclose AI-assisted development in the README ([13aa3a6](https://github.com/srivarra/czarr/commit/13aa3a6353221cbaaa80b67c3fd175dd55fd2d70))
 - Include the changelog in the site ([5d779e9](https://github.com/srivarra/czarr/commit/5d779e955494747b6f8e32609860a2c111f76155))
 - Pierre color theme; drop the tautological GPU tag ([8c7232b](https://github.com/srivarra/czarr/commit/8c7232b81e2423fbf163fa90bf622f9fce54f430))
 - Adopt zensical palette, tags, grids, tabs, footnotes ([41ed51e](https://github.com/srivarra/czarr/commit/41ed51ec64aa31c7486bbaf30e2bfd55e2cfb93d))
@@ -115,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configure cu12/cu13 optional extras + uv lockfile ([396e59a](https://github.com/srivarra/czarr/commit/396e59aaef9bc3c1bae67c5f44565be74452cb95))
 
 ### 🧰 Maintenance
+- Prek reformatting ([21f455c](https://github.com/srivarra/czarr/commit/21f455c0f6f473378d771d6ad089ee60f4734dd8))
 - Stop tracking .planning/ and .dex ([e6b44e3](https://github.com/srivarra/czarr/commit/e6b44e387bf02ef2444fb2a5bfe23b6d4d234b2d))
 - Stop tracking bench/ ([630ae3c](https://github.com/srivarra/czarr/commit/630ae3c3d5ca9b9d798b464eaa7fa59fbd052de6))
 - Adopt ty via prek, pay down surfaced lint/type debt ([c6deca4](https://github.com/srivarra/czarr/commit/c6deca4bab346edfa14466611eee2b513bbbfc38))
